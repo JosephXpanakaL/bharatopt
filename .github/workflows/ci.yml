@@ -31,4 +31,4 @@ jobs:
       - uses: actions/checkout@v4
       - name: Compile CUDA backend
         run: |
-          docker run --rm -v "$PWD:/src" -w /src nvidia/cuda:13.4.1-devel-ubuntu24.04 bash -lc             "apt-get update -qq && apt-get install -y -qq cmake && cmake -S . -B build-cuda -DBHARATOPT_ENABLE_CUDA=ON -DCMAKE_BUILD_TYPE=Release && cmake --build build-cuda -j2"
+          docker run --rm -v "$PWD:/src" -w /src nvidia/cuda:12.6.3-devel-ubuntu24.04 bash -lc             "apt-get update -qq && apt-get install -y -qq cmake && cmake -S . -B build-cuda -DBHARATOPT_ENABLE_CUDA=ON -DCMAKE_BUILD_TYPE=Release && cmake --build build-cuda -j2"
