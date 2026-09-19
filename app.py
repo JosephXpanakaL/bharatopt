@@ -58,6 +58,28 @@ def ensure_bharatopt_engine():
 
 
 # --- CORE CLI BRIDGE ---
+def run_pooling_engine(timeout_seconds=30.0):
+    exe, build_error = ensure_bharatopt_engine()
+    if exe is None:
+        return {"status": "CRASH", "error": build_error or "Native BharatOpt engine unavailable."}
+
+    with tempfile.TemporaryDirectory(prefix="bharatopt_pooling_") as tmp_dir:
+        output_path = Path(tmp_dir) / "pooling.json"
+        command = [str(exe.resolve()), "--pooling-demo", "--output", str(output_path), "--mode", "certified"]
+
+        try:
+            completed = subprocess.run(command, capture_output=True, text=True, timeout=timeout_seconds, check=False)
+        except subprocess.TimeoutExpired:
+            return {"status": "TIMEOUT", "error": f"Pooling solve exceeded {timeout_seconds}s limit."}
+
+        if not output_path.exists():
+            return {"status": "CRASH", "error": f"Pooling engine failed. Exit code: {completed.returncode}\nStderr: {completed.stderr}"}
+
+        try:
+            return json.loads(output_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            return {"status": "CRASH", "error": f"Pooling engine returned invalid JSON: {exc}"}
+
 def solve_with_bharatopt_cli(uploaded_file, timeout_seconds=15.0):
     exe, build_error = ensure_bharatopt_engine()
     if exe is None:
@@ -117,12 +139,38 @@ with st.sidebar:
     st.header("Refinery Configuration")
     uploaded_file = st.file_uploader("Upload Model (.mps)", type=["mps"])
     solve_button = st.button("Run Optimizer", type="primary", use_container_width=True)
+    pooling_button = st.button("Run Native Pooling Analysis", use_container_width=True)
 
     st.divider()
     st.subheader("Engine Status")
     st.success("CPU: Simplex Core (Active)")
     st.success("GPU: CUDA Batched Heuristics (Ready)")
     st.success("Safety: Directed-Rounding (Enforced)")
+
+if pooling_button:
+    with st.spinner("Running native SLP + McCormick pooling analysis..."):
+        pooling_result = run_pooling_engine()
+
+    if pooling_result.get("status") == "SLP_CONVERGED":
+        st.subheader("Native Refinery Pooling Analysis")
+        st.caption("These values are computed live by BharatOpt C++ SLP and McCormick engines on the built-in MRPL pooling benchmark. No UI fallback or hard-coded result is used.")
+        p1, p2, p3 = st.columns(3)
+        slp_objective = pooling_result.get("slp_objective")
+        mc_bound = pooling_result.get("mccormick_bound")
+        nonlinear_gap = pooling_result.get("nonlinear_gap")
+        p1.metric("SLP Objective", f"₹ {slp_objective:,.2f}" if isinstance(slp_objective, (int, float)) else "Not reported")
+        p2.metric("McCormick Global Bound", f"₹ {mc_bound:,.2f}" if isinstance(mc_bound, (int, float)) else "Not reported")
+        p3.metric("Non-Linear Gap", f"{nonlinear_gap * 100:.4f}%" if isinstance(nonlinear_gap, (int, float)) else "Not reported")
+        d1, d2, d3, d4 = st.columns(4)
+        d1.metric("SLP Iterations", pooling_result.get("slp_iterations", "—"))
+        d2.metric("Accepted Steps", pooling_result.get("accepted_steps", "—"))
+        d3.metric("Rejected Steps", pooling_result.get("rejected_steps", "—"))
+        ratio = pooling_result.get("improvement_ratio")
+        d4.metric("Improvement Ratio", f"{ratio:.4f}" if isinstance(ratio, (int, float)) else "Not reported")
+        st.success(f"SLP: {pooling_result.get('status')} • McCormick: {pooling_result.get('mccormick_status')}")
+        st.caption("For this maximization model, the McCormick relaxation is a global upper bound. The nonlinear gap is computed as (bound − SLP objective) / (1 + |SLP objective|).")
+    else:
+        st.error(f"Pooling analysis failed: {pooling_result.get('error', pooling_result.get('status'))}")
 
 if uploaded_file and solve_button:
     with st.spinner("Preparing native BharatOpt engine and executing model..."):
