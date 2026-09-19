@@ -10,6 +10,7 @@ option(BHARATOPT_ENABLE_CUDA "Build CUDA backend" OFF)
 set(BHARATOPT_CORE_SOURCES
   src/mps.cpp
   src/solver.cpp
+  src/qp.cpp
 )
 
 if(NOT BHARATOPT_ENABLE_CUDA)
