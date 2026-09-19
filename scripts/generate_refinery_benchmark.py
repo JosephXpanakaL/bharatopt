@@ -14,17 +14,24 @@ def main():
     rng=random.Random(args.seed)
     n=max(2,args.variables);m=max(1,args.constraints);k=max(1,min(args.nnz_per_row,n))
     vars=["X%06d"%j for j in range(n)]
+    xtrue=[rng.uniform(10,100) for _ in range(n)]
     rows=[]
     for i in range(m):
         sense="L" if i%3==0 else ("G" if i%3==1 else "E")
-        rows.append((sense,"R%06d"%i,float(rng.randint(500,5000))))
+        rows.append((sense,"R%06d"%i,0.0))
     obj=[rng.uniform(1,20) for _ in range(n)]
     entries=[[] for _ in range(m)]
     for i in range(m):
         for j in rng.sample(range(n),k): entries[i].append((j,rng.uniform(0.05,2.0)))
     inv=[[] for _ in range(n)]
+    feasible_rhs=[]
     for i in range(m):
+        activity=sum(v*xtrue[j] for j,v in entries[i])
+        sense=rows[i][0]
+        rhs=activity+(rng.uniform(10,100) if sense=="L" else (-rng.uniform(10,100) if sense=="G" else 0.0))
+        feasible_rhs.append(rhs)
         for j,v in entries[i]: inv[j].append((i,v))
+    rows=[(rows[i][0],rows[i][1],feasible_rhs[i]) for i in range(m)]
     lines=["NAME          BHARATOPT-REFINERY-STRESS","ROWS"," N  COST"]
     lines += [" %s  %s"%(s,name) for s,name,_ in rows]
     lines += ["COLUMNS"]
