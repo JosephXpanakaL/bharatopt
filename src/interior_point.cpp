@@ -131,7 +131,7 @@ SolverResult solve_interior_point(const LPModel&m,const InteriorPointOptions&opt
     r.best_bound=r.objective;r.converged=true;r.status="OPTIMALITY_TOL_REACHED";return r;
   }
 
-  std::vector<double>z(s.n,1.0),slack(s.m,1.0),y(s.m,0.0),rp,rd,rc,dz,dy,ds,tmp;
+  std::vector<double>z(s.n,1.0),slack(s.n,1.0),y(s.m,0.0),rp,rd,rc,dz,dy,ds,tmp;
   const auto t0=std::chrono::steady_clock::now();
   for(int it=1;it<=opt.max_iterations;it++){
     Bz(s,z,tmp);rp.resize(s.m);for(int i=0;i<s.m;i++)rp[i]=tmp[i]-s.b[i];
