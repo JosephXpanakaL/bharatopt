@@ -524,7 +524,10 @@ McCormickRelaxation build_mccormick_relaxation(
     }
   }
 
-  for (const auto& product : products) {
+  for (std::size_t product_index = 0;
+       product_index < products.size();
+       ++product_index) {
+    const auto& product = products[product_index];
     const int w = product.auxiliary;
     const auto& term = product.term;
 
@@ -548,7 +551,7 @@ McCormickRelaxation build_mccormick_relaxation(
         std::max(std::max(p1, p2), std::max(p3, p4));
 
     result.relaxation.var_names.push_back(
-        "mc_product_" + std::to_string(products.size() - 1));
+        "mc_product_" + std::to_string(product_index));
     result.relaxation.objective.push_back(0.0);
     result.relaxation.lower.push_back(product_lower);
     result.relaxation.upper.push_back(product_upper);
