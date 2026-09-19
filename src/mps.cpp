@@ -29,7 +29,7 @@ LPModel parse_mps(const std::string&path){
   if(t[0]=="RANGES"){sec=Sec::RANGES;ranges.assign(m.rows.size(),0.0);continue;}
   if(t[0]=="BOUNDS"){sec=Sec::BOUNDS;continue;}
   if(t[0]=="ENDATA")break;
-  if(sec==Sec::OBJSENSE){std::string s=t.back();if(s=="MAX")m.maximize=true;else if(s=="MIN")m.maximize=false;else throw std::runtime_error("Unsupported OBJSENSE: "+s);saw_obj_sense=true;sec=Sec::NONE;continue;}
+  if(sec==Sec::OBJSENSE){std::string s=t.back();if(s=="MAX")m.maximize=true;else if(s=="MIN")m.maximize=false;else throw std::runtime_error("Unsupported OBJSENSE: "+s);sec=Sec::NONE;continue;}
   if(sec==Sec::OBJNAME){if(t.size()>0)obj=t.back();sec=Sec::NONE;continue;}
   if(sec==Sec::ROWS){
    if(t.size()<2)continue;char s=t[0][0];ConstraintRow row;row.name=t[1];
