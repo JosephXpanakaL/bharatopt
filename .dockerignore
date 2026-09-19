@@ -1,0 +1,6 @@
+build/
+.git/
+.github/
+__pycache__/
+*.pyc
+data/*.mps
