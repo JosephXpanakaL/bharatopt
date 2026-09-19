@@ -1,0 +1,16 @@
+# BharatOpt native nonlinear pooling benchmark
+# The Streamlit "Run Native Pooling Analysis" button executes this
+# mathematical structure through the C++ SLP and McCormick engines.
+#
+# Variables:
+#   light_crude  in [2, 10]
+#   heavy_crude  in [2, 10]
+#
+# Objective (maximize):
+#   100*light_crude + 80*heavy_crude + 5*light_crude*heavy_crude
+#
+# Constraint:
+#   light_crude + heavy_crude <= 12
+#
+# This file documents the exact model currently constructed by
+# --pooling-demo. It is model data, not a stored solver result.
