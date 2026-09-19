@@ -33,7 +33,7 @@ SolverResult BharatOptSolverCore::solve_lp(const LPModel&m,const SolverOptions&o
     proj(r.x,m.lower,m.upper);
     for(int j=0;j<n;j++)xbar[j]=r.x[j]+o.theta*(r.x[j]-xprev[j]);
     Ax(m.A,r.x,a);
-    double ps=0;for(int i=0;i<rc;i++){double v=a[i],w=0;if(v<m.row_lower[i])w=m.row_lower[i]-v;else if(v>m.row_upper[i])w=v-model.row_upper[i];ps+=w*w;}r.primal_residual=std::sqrt(ps)/(1+n2(a));
+    double ps=0;for(int i=0;i<rc;i++){double v=a[i],w=0;if(v<m.row_lower[i])w=m.row_lower[i]-v;else if(v>m.row_upper[i])w=v-m.row_upper[i];ps+=w*w;}r.primal_residual=std::sqrt(ps)/(1+n2(a));
     double ds=0;for(int j=0;j<n;j++){double z=r.x[j]-(m.objective[j]+aty[j]);double p=std::min(std::max(z,m.lower[j]),m.upper[j]);double d=r.x[j]-p;ds+=d*d;}r.dual_residual=std::sqrt(ds)/(1+n2(m.objective));r.iterations=it;
     if(std::max(r.primal_residual,r.dual_residual)<=o.tolerance){r.converged=true;break;}
   }
