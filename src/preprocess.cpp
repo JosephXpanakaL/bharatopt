@@ -27,7 +27,7 @@ PreprocessResult preprocess_lp(const LPModel&input,int passes){
   if(out.model.lower.size()!=out.model.A.cols||out.model.upper.size()!=out.model.A.cols){out.feasible=false;out.message="Variable bound dimension mismatch";return out;}
   if(out.model.row_lower.size()!=out.model.A.rows||out.model.row_upper.size()!=out.model.A.rows){out.feasible=false;out.message="Constraint bound dimension mismatch";return out;}
   for(std::size_t j=0;j<out.model.A.cols;j++)if(out.model.lower[j]>out.model.upper[j]+1e-12){out.feasible=false;out.message="Inconsistent variable bounds";return out;}
-  for(std::size_t i=0;i<out.model.A.rows;i++)if(out.model.row_ptr[i]==out.model.row_ptr[i+1] && (0.0<out.model.row_lower[i]-1e-12||0.0>out.model.row_upper[i]+1e-12)){out.feasible=false;out.message="Infeasible zero row: "+out.model.rows[i].name;return out;}
+  for(std::size_t i=0;i<out.model.A.rows;i++)if(out.model.A.row_ptr[i]==out.model.A.row_ptr[i+1] && (0.0<out.model.row_lower[i]-1e-12||0.0>out.model.row_upper[i]+1e-12)){out.feasible=false;out.message="Infeasible zero row: "+out.model.rows[i].name;return out;}
   tighten_singletons(out.model);
   for(std::size_t j=0;j<out.model.A.cols;j++)if(out.model.lower[j]>out.model.upper[j]+1e-12){out.feasible=false;out.message="Presolve detected inconsistent bounds";return out;}
 
