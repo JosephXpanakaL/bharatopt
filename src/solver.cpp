@@ -155,6 +155,13 @@ SolverResult BharatOptSolverCore::solve_lp(const LPModel&input,const SolverOptio
   r.solve_time_sec=std::chrono::duration<double>(std::chrono::steady_clock::now()-t0).count();
   return r;
 }
+SolverResult BharatOptSolverCore::solve(const LPModel& model,const SolverOptions& options){
+  // Central dispatch used by the CLI and presentation layer.
+  // Integer variables require the MILP branch-and-bound path; otherwise solve as an LP.
+  if(model.has_integer_variables()) return solve_milp(model,options);
+  return solve_lp(model,options);
+}
+
 SolverResult BharatOptSolverCore::solve_milp(const LPModel&m,const SolverOptions&o){
   struct Node{LPModel model;SolverResult relaxation;double bound{0};};
   struct Cmp{bool maximize;bool operator()(const Node&a,const Node&b)const{return maximize?a.bound<b.bound:a.bound>b.bound;}};
