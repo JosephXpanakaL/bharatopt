@@ -16,30 +16,29 @@ bool finite_solution(const SolverResult&r){return !r.x.empty()&&std::isfinite(r.
 bool integer_feasible(const LPModel&m,const std::vector<double>&x,double tol,int&branch){branch=-1;for(size_t i=0;i<m.integer.size();++i)if(m.integer[i]){double nearest=std::round(x[i]);if(std::abs(x[i]-nearest)>tol){branch=(int)i;return false;}}return true;}
 }
 SolverResult BharatOptSolverCore::solve_lp(const LPModel&m,const SolverOptions&o){
- if(m.A.cols!=m.objective.size()||m.A.rows!=m.row_lower.size()||m.A.rows!=m.row_upper.size()||m.lower.size()!=m.A.cols||m.upper.size()!=m.A.cols)throw std::runtime_error("Inconsistent model dimensions");
- int n=(int)m.A.cols,rc=(int)m.A.rows;SolverResult r;r.x.assign(n,0);proj(r.x,m.lower,m.upper);
- std::vector<double>xbar=r.x,xprev=r.x,y(rc),a,aty;double L=opnorm(m.A);if(L<1e-12)L=1;double tau=o.tau,sigma=o.sigma;
- if(tau*sigma*L*L>=.95){double s=std::sqrt(.9/(tau*sigma*L*L));tau*=s;sigma*=s;}
- auto t0=std::chrono::steady_clock::now();bool gpu_mode=false;
+  if(m.A.cols!=m.objective.size()||m.A.rows!=m.row_lower.size()||m.A.rows!=m.row_upper.size()||m.lower.size()!=m.A.cols||m.upper.size()!=m.A.cols)throw std::runtime_error("Inconsistent model dimensions");
 #ifdef BHARATOPT_CUDA_ENABLED
- gpu_mode=o.use_cuda&&cuda_backend::cuda_available();
+  if(o.use_cuda){SolverResult gpu;if(cuda_backend::CudaPdhgSolver().solve(m,o,gpu))return gpu;}
 #endif
- r.backend=gpu_mode?"CUDA-hybrid":"CPU";
- for(int it=1;it<=o.max_iterations;it++){
-  if(gpu_mode&&!cuda_backend::spmv(m.A,xbar,a))Ax(m.A,xbar,a);else if(!gpu_mode)Ax(m.A,xbar,a);
-  for(int i=0;i<rc;i++){double q=y[i]+sigma*a[i];double p=std::min(std::max(q/sigma,m.row_lower[i]),m.row_upper[i]);y[i]=q-sigma*p;}
-  ATy(m.A,y,aty);
-  xprev=r.x;
-  for(int j=0;j<n;j++)r.x[j]-=tau*(m.objective[j]+aty[j]);
-  if(gpu_mode&&!cuda_backend::project_box(r.x,m.lower,m.upper))proj(r.x,m.lower,m.upper);else if(!gpu_mode)proj(r.x,m.lower,m.upper);
-  for(int j=0;j<n;j++)xbar[j]=r.x[j]+o.theta*(r.x[j]-xprev[j]);
-  if(gpu_mode&&!cuda_backend::spmv(m.A,r.x,a))Ax(m.A,r.x,a);else if(!gpu_mode)Ax(m.A,r.x,a);
-  double ps=0;for(int i=0;i<rc;i++){double v=a[i],w=0;if(v<m.row_lower[i])w=m.row_lower[i]-v;else if(v>m.row_upper[i])w=v-m.row_upper[i];ps+=w*w;}r.primal_residual=std::sqrt(ps)/(1+n2(a));
-  double ds=0;for(int j=0;j<n;j++){double z=r.x[j]-(m.objective[j]+aty[j]);double p=std::min(std::max(z,m.lower[j]),m.upper[j]);double d=r.x[j]-p;ds+=d*d;}r.dual_residual=std::sqrt(ds)/(1+n2(m.objective));r.iterations=it;
-  if(std::max(r.primal_residual,r.dual_residual)<=o.tolerance){r.converged=true;break;}
- }
- for(int j=0;j<n;j++)r.objective+=m.objective[j]*r.x[j];r.best_bound=r.objective;r.mip_gap=0;
- r.solve_time_sec=std::chrono::duration<double>(std::chrono::steady_clock::now()-t0).count();r.status=r.converged?"OPTIMALITY_TOL_REACHED":"ITERATION_LIMIT";return r;
+  int n=(int)m.A.cols,rc=(int)m.A.rows;SolverResult r;r.x.assign(n,0);proj(r.x,m.lower,m.upper);
+  std::vector<double>xbar=r.x,xprev=r.x,y(rc),a,aty;double L=opnorm(m.A);if(L<1e-12)L=1;double tau=o.tau,sigma=o.sigma;
+  if(tau*sigma*L*L>=.95){double s=std::sqrt(.9/(tau*sigma*L*L));tau*=s;sigma*=s;}
+  auto t0=std::chrono::steady_clock::now();r.backend="CPU-PDHG";
+  for(int it=1;it<=o.max_iterations;it++){
+    Ax(m.A,xbar,a);
+    for(int i=0;i<rc;i++){double q=y[i]+sigma*a[i];double p=std::min(std::max(q/sigma,m.row_lower[i]),m.row_upper[i]);y[i]=q-sigma*p;}
+    ATy(m.A,y,aty);
+    xprev=r.x;
+    for(int j=0;j<n;j++)r.x[j]-=tau*(m.objective[j]+aty[j]);
+    proj(r.x,m.lower,m.upper);
+    for(int j=0;j<n;j++)xbar[j]=r.x[j]+o.theta*(r.x[j]-xprev[j]);
+    Ax(m.A,r.x,a);
+    double ps=0;for(int i=0;i<rc;i++){double v=a[i],w=0;if(v<m.row_lower[i])w=m.row_lower[i]-v;else if(v>m.row_upper[i])w=v-model.row_upper[i];ps+=w*w;}r.primal_residual=std::sqrt(ps)/(1+n2(a));
+    double ds=0;for(int j=0;j<n;j++){double z=r.x[j]-(m.objective[j]+aty[j]);double p=std::min(std::max(z,m.lower[j]),m.upper[j]);double d=r.x[j]-p;ds+=d*d;}r.dual_residual=std::sqrt(ds)/(1+n2(m.objective));r.iterations=it;
+    if(std::max(r.primal_residual,r.dual_residual)<=o.tolerance){r.converged=true;break;}
+  }
+  for(int j=0;j<n;j++)r.objective+=m.objective[j]*r.x[j];r.best_bound=r.objective;r.mip_gap=0;
+  r.solve_time_sec=std::chrono::duration<double>(std::chrono::steady_clock::now()-t0).count();r.status=r.converged?"OPTIMALITY_TOL_REACHED":"ITERATION_LIMIT";return r;
 }
 SolverResult BharatOptSolverCore::solve_milp(const LPModel&m,const SolverOptions&o){
  auto t0=std::chrono::steady_clock::now();SolverResult out;out.backend="CPU-branch-and-bound";out.x.assign(m.A.cols,0);double incumbent=INF,best_bound=INF;size_t nodes=0;bool hit_limit=false;
