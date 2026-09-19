@@ -138,7 +138,7 @@ bool CudaPdhgSolver::solve(const LPModel&m,const SolverOptions&o,SolverResult&r)
     extrapolate<<<(N+255)/256,256>>>(N,o.theta,g.x.p,g.xprev.p,g.xbar.p);ck(cudaGetLastError(),"extrapolate");
 
     // Ax at current x
-    cs(cusparseDnVecSetValues(g.xbar_vec,N?g.x.p:g.x.p),"set x");
+    cs(cusparseDnVecSetValues(g.xbar_vec,g.x.p),"set x");
     cs(cusparseDnVecSetValues(g.ax_vec,g.ax.p),"set ax");
     cs(cusparseSpMV(g.sparse,CUSPARSE_OPERATION_NON_TRANSPOSE,&alpha,g.A,g.xbar_vec,&beta,g.ax_vec,CUDA_R_64F,CUSPARSE_SPMV_ALG_DEFAULT,g.buffer),"Ax");
 
