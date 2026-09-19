@@ -59,3 +59,8 @@ async def solve_mps(file: UploadFile = File(...), cuda: bool = Form(False),
                 "--max-nodes", str(max_nodes), "--mip-gap", str(mip_gap)]
         if cuda: args.append("--cuda")
         return run_solver(args)
+
+
+@app.post("/api/solve/qp-demo")
+def solve_qp_demo(max_iters: int = Form(50000), tolerance: float = Form(1e-6)):
+    return run_solver(["--qp-demo", "--max-iters", str(max_iters), "--tol", str(tolerance)])
