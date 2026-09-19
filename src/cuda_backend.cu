@@ -7,6 +7,7 @@
 #include <cmath>
 #include <limits>
 #include <stdexcept>
+#include <iostream>
 #include <string>
 
 namespace bharatopt::cuda_backend {
@@ -170,7 +171,9 @@ bool CudaPdhgSolver::solve(const LPModel&m,const SolverOptions&o,SolverResult&r)
     projected_stationarity<<<(N+255)/256,256>>>(N,g.x.p,g.grad.p,g.lo.p,g.hi.p,g.res.p);ck(cudaGetLastError(),"stationarity");
     double ns=nrm2(g.res,N),nc=nrm2(g.c,N);r.dual_residual=ns/(1.0+nc);
     double obj=0;cb(cublasDdot(g.blas,N,g.c.p,1,g.x.p,1,&obj),"objective");r.objective=obj;r.iterations=it;
+    if(o.verbose&&(it==1||it%1000==0))std::cout<<"[CUDA] iter "<<it<<" primal "<<r.primal_residual<<" dual "<<r.dual_residual<<"\\n";
     if(std::max(r.primal_residual,r.dual_residual)<=o.tolerance){r.converged=true;break;}
+    if(o.time_limit_sec>0&&std::chrono::duration<double>(std::chrono::steady_clock::now()-t0).count()>=o.time_limit_sec){r.status="TIME_LIMIT";break;}
   }
   g.download(g.x,r.x);std::vector<double>host_y;g.download(g.y,host_y);double db=dual_lower_bound_host(m,host_y);r.dual_bound=db;r.best_bound=m.maximize?(-db+m.objective_offset):(db+m.objective_offset);r.mip_gap=0;r.solve_time_sec=std::chrono::duration<double>(std::chrono::steady_clock::now()-t0).count();r.status=r.converged?"OPTIMALITY_TOL_REACHED":"ITERATION_LIMIT";return true;
  }catch(...){return false;}
