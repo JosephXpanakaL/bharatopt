@@ -4,6 +4,7 @@
 #include "bharatopt/qp.hpp"
 #include "bharatopt/solver.hpp"
 #include "bharatopt/cuda_backend.hpp"
+#include <algorithm>
 #include <cmath>
 #include <fstream>
 #include <iostream>
