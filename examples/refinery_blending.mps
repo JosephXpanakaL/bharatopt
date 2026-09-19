@@ -1,0 +1,19 @@
+NAME          MRPL-DEMO
+ROWS
+ N  COST
+ L  SULFUR
+ L  CAPACITY
+ G  DEMAND
+COLUMNS
+    CRUDE_A   COST       12.0   SULFUR       1.0
+    CRUDE_A   CAPACITY   1.0    DEMAND       1.0
+    CRUDE_B   COST       9.0    SULFUR       2.5
+    CRUDE_B   CAPACITY   1.0    DEMAND       1.0
+RHS
+    RHS1      SULFUR     3.5
+    RHS1      CAPACITY   10.0
+    RHS1      DEMAND     8.0
+BOUNDS
+ UP BND1      CRUDE_A     10.0
+ UP BND1      CRUDE_B     10.0
+ENDATA
