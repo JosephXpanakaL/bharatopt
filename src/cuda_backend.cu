@@ -113,8 +113,11 @@ bool CudaPdhgSolver::solve(const LPModel&m,const SolverOptions&o,SolverResult&r)
   cs(cusparseCreateDnVec(&g.y_vec,M,g.y.p,CUDA_R_64F),"y desc");
   cs(cusparseCreateDnVec(&g.aty_vec,N,g.aty.p,CUDA_R_64F),"aty desc");
   double alpha=1.0,beta=0.0;
-  cs(cusparseSpMV_bufferSize(g.sparse,CUSPARSE_OPERATION_NON_TRANSPOSE,&alpha,g.A,g.xbar_vec,&beta,g.ax_vec,CUDA_R_64F,CUSPARSE_SPMV_ALG_DEFAULT,&g.buffer_size),"SpMV buffer size");
-  ck(cudaMalloc(&g.buffer,g.buffer_size),"SpMV buffer");
+  std::size_t b0=0,b1=0;
+  cs(cusparseSpMV_bufferSize(g.sparse,CUSPARSE_OPERATION_NON_TRANSPOSE,&alpha,g.A,g.xbar_vec,&beta,g.ax_vec,CUDA_R_64F,CUSPARSE_SPMV_ALG_DEFAULT,&b0),"SpMV NN buffer");
+  cs(cusparseSpMV_bufferSize(g.sparse,CUSPARSE_OPERATION_TRANSPOSE,&alpha,g.A,g.y_vec,&beta,g.aty_vec,CUDA_R_64F,CUSPARSE_SPMV_ALG_DEFAULT,&b1),"SpMV T buffer");
+  g.buffer_size=std::max(b0,b1);
+  if(g.buffer_size>0)ck(cudaMalloc(&g.buffer,g.buffer_size),"SpMV buffer");
 
   auto nrm2=[&](const DeviceVec&v,int n){double z=0;cb(cublasDnrm2(g.blas,n,v.p,1,&z),"Dnrm2");return z;};
   auto t0=std::chrono::steady_clock::now();
