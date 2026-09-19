@@ -83,7 +83,7 @@ SolverResult BharatOptSolverCore::solve_milp(const LPModel&m,const SolverOptions
   std::priority_queue<Node,std::vector<Node>,Cmp> open((Cmp{m.maximize}));
   auto t0=std::chrono::steady_clock::now();
   SolverResult out;out.backend="CPU-best-bound-branch-and-bound";out.x.assign(m.A.cols,0);
-  double incumbent=m.maximize?-INF:INF;std::size_t nodes=0;bool limit=false;
+  double incumbent=m.maximize?-INF:INF;std::size_t nodes=0;bool limit=false,gap_reached=false;
 
   auto exhausted=[&](){
     if(nodes>=(std::size_t)std::max(1,o.max_nodes))return true;
@@ -109,6 +109,11 @@ SolverResult BharatOptSolverCore::solve_milp(const LPModel&m,const SolverOptions
 
   while(!open.empty()&&!limit){
     if(exhausted()){limit=true;break;}
+    if(std::isfinite(incumbent)){
+      double bound=open.top().bound;
+      double gap=std::isfinite(bound)?std::abs(incumbent-bound)/(1.0+std::abs(incumbent)):INF;
+      if(gap<=o.mip_gap){gap_reached=true;break;}
+    }
     Node node=open.top();open.pop();
     if(dominates_incumbent(node.bound))continue;
 
@@ -150,8 +155,8 @@ SolverResult BharatOptSolverCore::solve_milp(const LPModel&m,const SolverOptions
     out.objective=incumbent;
     if(!open.empty()){out.best_bound=open.top().bound;out.dual_bound=open.top().bound;out.mip_gap=std::abs(incumbent-out.best_bound)/(1+std::abs(incumbent));}
     else{out.best_bound=incumbent;out.dual_bound=incumbent;out.mip_gap=0.0;}
-    out.converged=!limit&&open.empty();
-    out.status=out.converged?"MIP_OPTIMALITY_PROVED":"MIP_LIMIT";
+    out.converged=!limit&&(open.empty()||gap_reached);
+    out.status=open.empty()&&!limit?"MIP_OPTIMALITY_PROVED":(gap_reached?"MIP_GAP_REACHED":"MIP_LIMIT");
   }else{
     out.objective=m.maximize?-INF:INF;out.best_bound=m.maximize?-INF:INF;out.dual_bound=out.best_bound;
     out.mip_gap=INF;out.status=limit?"MIP_LIMIT_NO_INCUMBENT":"MIP_NO_FEASIBLE_INCUMBENT";
