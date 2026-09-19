@@ -123,7 +123,7 @@ SolverResult solve_interior_point(const LPModel&m,const InteriorPointOptions&opt
   SolverResult r;r.backend="CPU-Mehrotra-IP";
   if(m.has_integer_variables()){r.status="INTEGER_MODEL_NOT_SUPPORTED_BY_IP";return r;}
   StdLP s=standardize(m);
-  if(s.n>opt.max_variables+s.m*0 || s.m>opt.max_constraints){r.status="IP_SIZE_LIMIT";return r;}
+  if(s.n>opt.max_variables || s.m>opt.max_constraints){r.status="IP_SIZE_LIMIT";return r;}
 
   if(s.n==0){
     r.x.assign(m.A.cols,0.0);for(std::size_t j=0;j<m.A.cols;j++)r.x[j]=s.vars[j].constant;
