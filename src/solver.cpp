@@ -34,6 +34,13 @@ double dual_lower_bound(const LPModel&m,const std::vector<double>&y){
 }
 bool finite_solution(const SolverResult&r){return !r.x.empty()&&std::isfinite(r.objective)&&std::isfinite(r.primal_residual)&&std::isfinite(r.dual_residual);}
 bool integer_feasible(const LPModel&m,const std::vector<double>&x,double tol,int&branch){branch=-1;for(std::size_t i=0;i<m.integer.size();i++)if(m.integer[i]){double n=std::round(x[i]);if(std::abs(x[i]-n)>tol){branch=(int)i;return false;}}return true;}
+bool feasible_solution(const LPModel&m,std::vector<double>&x,double tol){
+  if(x.size()!=m.A.cols)return false;
+  for(std::size_t j=0;j<x.size();j++){if(m.integer[j])x[j]=std::round(x[j]);if(x[j]<m.lower[j]-tol||x[j]>m.upper[j]+tol)return false;}
+  std::vector<double>ax;Ax(m.A,x,ax);
+  for(std::size_t i=0;i<ax.size();i++)if(ax[i]<m.row_lower[i]-tol||ax[i]>m.row_upper[i]+tol)return false;
+  return true;
+}
 }
 SolverResult BharatOptSolverCore::solve_lp(const LPModel&input,const SolverOptions&o){
   if(input.A.cols!=input.objective.size()||input.A.rows!=input.row_lower.size()||input.A.rows!=input.row_upper.size()||input.lower.size()!=input.A.cols||input.upper.size()!=input.A.cols)throw std::runtime_error("Inconsistent model dimensions");
@@ -112,8 +119,11 @@ SolverResult BharatOptSolverCore::solve_milp(const LPModel&m,const SolverOptions
       if(f>o.integrality_tolerance&&score>frac){frac=score;branch=(int)j;}
     }
     if(branch<0){
-      double obj=node.relaxation.objective;
-      if((!m.maximize&&obj<incumbent)||(m.maximize&&obj>incumbent)){incumbent=obj;out.x=node.relaxation.x;}
+      std::vector<double>candidate=node.relaxation.x;
+      if(feasible_solution(node.model,candidate,std::max(10.0*o.tolerance,o.integrality_tolerance))){
+        double obj=0;for(std::size_t j=0;j<candidate.size();j++)obj+=m.objective[j]*candidate[j];obj=(m.maximize?-obj:obj)+m.objective_offset;
+        if((!m.maximize&&obj<incumbent)||(m.maximize&&obj>incumbent)){incumbent=obj;out.x=candidate;}
+      }
       while(!open.empty()&&dominates_incumbent(open.top().bound))open.pop();
       continue;
     }
