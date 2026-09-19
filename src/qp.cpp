@@ -21,7 +21,7 @@ SolverResult BharatOptSolverCore::solve_qp(const QPModel&m,const SolverOptions&o
  if(!m.convex_psd)throw std::runtime_error("QP model is not declared convex PSD");
  const LPModel&l=m.linear; if(m.Q.rows!=l.A.cols||m.Q.cols!=l.A.cols)throw std::runtime_error("Q dimension mismatch");
  if(l.objective.size()!=m.Q.cols||l.lower.size()!=m.Q.cols||l.upper.size()!=m.Q.cols)throw std::runtime_error("QP vector dimension mismatch");
- int n=(int)m.Q.cols,rc=(int)l.A.rows;SolverResult r;r.x.assign(n,0);proj(r.x,l.lower,l.upper);std::vector<double>xbar=r.x,xprev=r.x,y(rc),a,aty,qx,grad;
+ int n=(int)m.Q.cols,rc=(int)l.A.rows;SolverResult r;r.x.assign(n,0);proj(r.x,l.lower,l.upper);std::vector<double>xbar=r.x,xprev=r.x,y(rc),a,aty,qx,grad(n);
  double La=opnorm(l.A);if(La<1e-12)La=1;double Lq=opnorm(m.Q);double tau=o.tau,sigma=o.sigma;if(Lq>1e-12)tau=std::min(tau,0.8/Lq);if(tau*sigma*La*La>=.95){double s=std::sqrt(.9/(tau*sigma*La*La));tau*=s;sigma*=s;}
  auto t0=std::chrono::steady_clock::now();r.backend="CPU-QP-PDHG";
  for(int it=1;it<=o.max_iterations;it++){
