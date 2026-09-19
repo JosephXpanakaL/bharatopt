@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BharatOpt Console</title>
+<style>
+body{font-family:Inter,system-ui,sans-serif;margin:0;background:#0b1020;color:#eef2ff}
+.wrap{max-width:1050px;margin:auto;padding:34px}
+h1{margin:0 0 6px} p{color:#aeb7d0}.card{background:#121a30;border:1px solid #26314f;border-radius:16px;padding:22px;margin:18px 0}
+button{border:0;border-radius:10px;padding:11px 16px;cursor:pointer}.primary{background:#6ea8fe;color:#06111f}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.metric{padding:14px;border-radius:10px;background:#0c1426}.metric b{display:block;font-size:1.25rem;margin-top:4px}
+pre{white-space:pre-wrap;background:#080d18;padding:16px;border-radius:10px;overflow:auto}input[type=file]{width:100%}
+@media(max-width:750px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>BharatOpt</h1>
+<p>SIH26119 • Indigenous sparse optimization solver prototype</p>
+<div class="card"><h2>Run MRPL demo</h2><label><input id="cuda" type="checkbox"> Use CUDA backend</label><br><br><button class="primary" onclick="runDemo()">Solve demo</button></div>
+<div class="card"><h2>Upload MPS</h2><input id="mps" type="file" accept=".mps"><br><br><label>CUDA <input id="mpscuda" type="checkbox"></label> <button class="primary" onclick="uploadMps()">Solve MPS</button></div>
+<div id="out" class="card" style="display:none"><div class="grid" id="metrics"></div><h3>Raw result</h3><pre id="raw"></pre></div>
+</div>
+<script>
+function show(d){document.getElementById("out").style.display="block";const keys=["status","objective","best_bound","mip_gap","primal_residual","dual_residual","solve_time_sec","backend","iterations","nodes"];document.getElementById("metrics").innerHTML=keys.map(k=>'<div class="metric">'+k+'<b>'+((d[k]??"—"))+'</b></div>').join("");document.getElementById("raw").textContent=JSON.stringify(d,null,2);}
+async function runDemo(){const f=new FormData();f.append("cuda",document.getElementById("cuda").checked);const r=await fetch("/api/solve/demo",{method:"POST",body:f});show(await r.json());}
+async function uploadMps(){const file=document.getElementById("mps").files[0];if(!file)return alert("Choose an MPS file");const f=new FormData();f.append("file",file);f.append("cuda",document.getElementById("mpscuda").checked);const r=await fetch("/api/solve/mps",{method:"POST",body:f});show(await r.json());}
+</script>
+</body></html>
