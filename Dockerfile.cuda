@@ -1,0 +1,17 @@
+FROM nvidia/cuda:12.6.3-devel-ubuntu24.04 AS build
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential cmake python3 python3-pip && rm -rf /var/lib/apt/lists/*
+WORKDIR /src
+COPY . .
+RUN cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBHARATOPT_ENABLE_CUDA=ON && cmake --build build -j2
+FROM nvidia/cuda:12.6.3-runtime-ubuntu24.04
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends python3 python3-pip && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY --from=build /src/build/bharatopt_cli /app/build/bharatopt_cli
+COPY api.py requirements.txt /app/
+COPY web /app/web
+RUN pip3 install --break-system-packages --no-cache-dir -r requirements.txt
+ENV BHARATOPT_BIN=/app/build/bharatopt_cli
+EXPOSE 8000
+CMD ["python3","-m","uvicorn","api:app","--host","0.0.0.0","--port","8000"]
