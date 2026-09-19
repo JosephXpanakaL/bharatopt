@@ -11,7 +11,6 @@
 #include <string>
 
 namespace bharatopt::cuda_backend {
-namespace {
 inline void ck(cudaError_t e,const char* w){if(e!=cudaSuccess)throw std::runtime_error(std::string(w)+": "+cudaGetErrorString(e));}
 inline void cb(cublasStatus_t e,const char* w){if(e!=CUBLAS_STATUS_SUCCESS)throw std::runtime_error(std::string(w)+": cuBLAS error");}
 inline void cs(cusparseStatus_t e,const char* w){if(e!=CUSPARSE_STATUS_SUCCESS)throw std::runtime_error(std::string(w)+": cuSPARSE error");}
@@ -93,7 +92,6 @@ struct CudaPdhgSolver::Impl{
   void download(const DeviceVec&v,std::vector<double>&h){h.resize(v.n);ck(cudaMemcpy(h.data(),v.p,v.n*sizeof(double),cudaMemcpyDeviceToHost),"cudaMemcpy D2H");}
 };
 
-}
 bool cuda_available(){int n=0;return cudaGetDeviceCount(&n)==cudaSuccess&&n>0;}
 std::string cuda_device_name(){if(!cuda_available())return "none";cudaDeviceProp p{};if(cudaGetDeviceProperties(&p,0)!=cudaSuccess)return "unknown";return p.name;}
 
