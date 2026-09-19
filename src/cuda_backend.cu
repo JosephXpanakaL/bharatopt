@@ -50,8 +50,11 @@ double dual_lower_bound_host(const LPModel&m,const std::vector<double>&y){
   double support=0.0;
   for(std::size_t i=0;i<m.A.rows;i++){
     double yi=y[i];
-    if(yi>0){if(!std::isfinite(m.row_upper[i]))return -INF;support+=m.row_upper[i]*yi;}
-    else if(yi<0){if(!std::isfinite(m.row_lower[i]))return -INF;support+=m.row_lower[i]*yi;}
+    if(!std::isfinite(m.row_lower[i])&&std::isfinite(m.row_upper[i])) yi=std::max(0.0,yi);
+    else if(std::isfinite(m.row_lower[i])&&!std::isfinite(m.row_upper[i])) yi=std::min(0.0,yi);
+    else if(!std::isfinite(m.row_lower[i])&&!std::isfinite(m.row_upper[i])) yi=0.0;
+    if(yi>0) support+=m.row_upper[i]*yi;
+    else if(yi<0) support+=m.row_lower[i]*yi;
   }
   std::vector<double>aty(m.A.cols,0.0);
   for(std::size_t i=0;i<m.A.rows;i++)for(int k=m.A.row_ptr[i];k<m.A.row_ptr[i+1];k++)aty[m.A.col_index[k]]+=m.A.values[k]*y[i];
