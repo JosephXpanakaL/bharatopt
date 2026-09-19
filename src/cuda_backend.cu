@@ -46,6 +46,24 @@ struct DeviceVec{
   ~DeviceVec(){if(p)cudaFree(p);}
   void alloc(std::size_t s){n=s;ck(cudaMalloc(&p,n*sizeof(double)),"cudaMalloc vector");}
 };
+double dual_lower_bound_host(const LPModel&m,const std::vector<double>&y){
+  double support=0.0;
+  for(std::size_t i=0;i<m.A.rows;i++){
+    double yi=y[i];
+    if(yi>0){if(!std::isfinite(m.row_upper[i]))return -INF;support+=m.row_upper[i]*yi;}
+    else if(yi<0){if(!std::isfinite(m.row_lower[i]))return -INF;support+=m.row_lower[i]*yi;}
+  }
+  std::vector<double>aty(m.A.cols,0.0);
+  for(std::size_t i=0;i<m.A.rows;i++)for(int k=m.A.row_ptr[i];k<m.A.row_ptr[i+1];k++)aty[m.A.col_index[k]]+=m.A.values[k]*y[i];
+  double value=-support;
+  for(std::size_t j=0;j<m.A.cols;j++){
+    double g=m.objective[j]+aty[j];
+    if(g>=0){if(!std::isfinite(m.lower[j]))return -INF;value+=g*m.lower[j];}
+    else {if(!std::isfinite(m.upper[j]))return -INF;value+=g*m.upper[j];}
+  }
+  return value;
+}
+
 struct DeviceCsr{
   double* val{nullptr};int* col{nullptr};int* row{nullptr};
   ~DeviceCsr(){if(val)cudaFree(val);if(col)cudaFree(col);if(row)cudaFree(row);}
@@ -154,7 +172,7 @@ bool CudaPdhgSolver::solve(const LPModel&m,const SolverOptions&o,SolverResult&r)
     double obj=0;cb(cublasDdot(g.blas,N,g.c.p,1,g.x.p,1,&obj),"objective");r.objective=obj;r.iterations=it;
     if(std::max(r.primal_residual,r.dual_residual)<=o.tolerance){r.converged=true;break;}
   }
-  g.download(g.x,r.x);r.best_bound=r.objective;r.mip_gap=0;r.solve_time_sec=std::chrono::duration<double>(std::chrono::steady_clock::now()-t0).count();r.status=r.converged?"OPTIMALITY_TOL_REACHED":"ITERATION_LIMIT";return true;
+  g.download(g.x,r.x);std::vector<double>host_y;g.download(g.y,host_y);double db=dual_lower_bound_host(m,host_y);r.dual_bound=db;r.best_bound=m.maximize?(-db+m.objective_offset):(db+m.objective_offset);r.mip_gap=0;r.solve_time_sec=std::chrono::duration<double>(std::chrono::steady_clock::now()-t0).count();r.status=r.converged?"OPTIMALITY_TOL_REACHED":"ITERATION_LIMIT";return true;
  }catch(...){return false;}
 }
 
