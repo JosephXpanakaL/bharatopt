@@ -1,5 +1,6 @@
 #include "bharatopt/interior_point.hpp"
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <stdexcept>
 #include <vector>
