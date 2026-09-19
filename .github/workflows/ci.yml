@@ -23,3 +23,10 @@ jobs:
         run: ./build/bharatopt_cli --demo --json | python3 -c 'import json,sys; json.load(sys.stdin); print("valid JSON")'
       - name: Check Python
         run: python3 -m py_compile api.py scripts/benchmark.py
+  cuda-compile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile CUDA backend
+        run: |
+          docker run --rm -v "$PWD:/src" -w /src nvidia/cuda:13.4.1-devel-ubuntu24.04 bash -lc             "apt-get update -qq && apt-get install -y -qq cmake && cmake -S . -B build-cuda -DBHARATOPT_ENABLE_CUDA=ON -DCMAKE_BUILD_TYPE=Release && cmake --build build-cuda -j2"
