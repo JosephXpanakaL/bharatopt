@@ -72,7 +72,15 @@ SolverResult BharatOptSolverCore::solve_lp(const LPModel&input,const SolverOptio
     if(std::max(r.primal_residual,r.dual_residual)<=o.tolerance){r.converged=true;break;}
     if(o.time_limit_sec>0&&std::chrono::duration<double>(std::chrono::steady_clock::now()-t0).count()>=o.time_limit_sec){r.status="TIME_LIMIT";break;}
   }
+  double db=dual_lower_bound(m,y);
   certify_original(input,r);
+  if(o.scaling_passes==0&&std::isfinite(db)){
+    r.dual_bound=db;
+    r.best_bound=input.maximize?(-db+input.objective_offset):(db+input.objective_offset);
+  } else {
+    r.dual_bound=-INF;
+    r.best_bound=r.objective;
+  }
   if(r.status.empty())r.status=r.converged?"OPTIMALITY_TOL_REACHED":"ITERATION_LIMIT";
   r.solve_time_sec=std::chrono::duration<double>(std::chrono::steady_clock::now()-t0).count();
   return r;
@@ -97,7 +105,7 @@ SolverResult BharatOptSolverCore::solve_milp(const LPModel&m,const SolverOptions
     Node n;n.model=model;
     if(exhausted()){limit=true;return n;}
     ++nodes;
-    SolverOptions lp=o;lp.use_cuda=false;lp.max_iterations=std::min(o.max_iterations,20000);lp.time_limit_sec=0.0;
+    SolverOptions lp=o;lp.use_cuda=false;lp.scaling_passes=0;lp.presolve=true;lp.max_iterations=std::min(o.max_iterations,20000);lp.time_limit_sec=0.0;
     auto rr=solve_lp(model,lp);
     if(rr.status=="INFEASIBLE_PRESOLVE"||!rr.converged||!std::isfinite(rr.best_bound))return n;
     n.relaxation=std::move(rr);n.bound=n.relaxation.best_bound;return n;
