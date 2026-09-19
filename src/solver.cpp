@@ -1,0 +1,36 @@
+#include "bharatopt/solver.hpp"
+#include "bharatopt/cuda_backend.hpp"
+#include <algorithm>
+#include <chrono>
+#include <cmath>
+#include <stdexcept>
+namespace bharatopt { namespace {
+double n2(const std::vector<double>&v){long double s=0;for(double a:v)s+=(long double)a*a;return std::sqrt((double)s);}
+void proj(std::vector<double>&v,const std::vector<double>&lo,const std::vector<double>&hi){for(size_t i=0;i<v.size();++i)v[i]=std::min(std::max(v[i],lo[i]),hi[i]);}
+void Ax(const SparseMatrixCSR&A,const std::vector<double>&x,std::vector<double>&y){y.assign(A.rows,0);for(size_t i=0;i<A.rows;i++){for(int k=A.row_ptr[i];k<A.row_ptr[i+1];k++)y[i]+=A.values[k]*x[A.col_index[k]];}}
+void ATy(const SparseMatrixCSR&A,const std::vector<double>&y,std::vector<double>&x){x.assign(A.cols,0);for(size_t i=0;i<A.rows;i++)for(int k=A.row_ptr[i];k<A.row_ptr[i+1];k++)x[A.col_index[k]]+=A.values[k]*y[i];}
+double opnorm(const SparseMatrixCSR&A){std::vector<double>x(A.cols,1),y,z;for(int it=0;it<12;it++){Ax(A,x,y);ATy(A,y,z);double n=n2(z);if(n==0)return 0;for(double&v:z)v/=n;x=z;}Ax(A,x,y);return n2(y)/std::max(n2(x),1e-30);}
+}
+SolverResult BharatOptSolverCore::solve(const LPModel&m,const SolverOptions&o){
+ if(m.A.cols!=m.objective.size()||m.A.rows!=m.row_lower.size()||m.A.rows!=m.row_upper.size())throw std::runtime_error("Inconsistent model dimensions");
+ int n=(int)m.A.cols, rcount=(int)m.A.rows; SolverResult r;r.x.assign(n,0);proj(r.x,m.lower,m.upper);
+ std::vector<double>xbar=r.x,y(rcount),a,aty;double L=opnorm(m.A);if(L<1e-12)L=1;double tau=o.tau,sigma=o.sigma;if(tau*sigma*L*L>=.95){double s=std::sqrt(.9/(tau*sigma*L*L));tau*=s;sigma*=s;}
+ auto t0=std::chrono::steady_clock::now();
+ for(int it=1;it<=o.max_iterations;it++){
+  bool gpu=false;
+#ifdef BHARATOPT_CUDA_ENABLED
+  gpu=o.use_cuda&&cuda_backend::cuda_available();
+#endif
+  if(gpu&&!cuda_backend::spmv(m.A,xbar,a))Ax(m.A,xbar,a);else if(!gpu)Ax(m.A,xbar,a);
+  for(int i=0;i<rcount;i++){double q=y[i]+sigma*a[i];double p=std::min(std::max(q/sigma,m.row_lower[i]),m.row_upper[i]);y[i]=q-sigma*p;}
+  ATy(m.A,y,aty);
+  for(int j=0;j<n;j++)r.x[j]-=tau*(m.objective[j]+aty[j]);
+  if(gpu&&!cuda_backend::project_box(r.x,m.lower,m.upper))proj(r.x,m.lower,m.upper);else if(!gpu)proj(r.x,m.lower,m.upper);
+  for(int j=0;j<n;j++)xbar[j]=r.x[j]+o.theta*(r.x[j]-xbar[j]);
+  if(gpu&&!cuda_backend::spmv(m.A,r.x,a))Ax(m.A,r.x,a);else if(!gpu)Ax(m.A,r.x,a);
+  double ps=0;for(int i=0;i<rcount;i++){double v=a[i],w=0;if(v<m.row_lower[i])w=m.row_lower[i]-v;else if(v>m.row_upper[i])w=v-m.row_upper[i];ps+=w*w;}r.primal_residual=std::sqrt(ps)/(1+n2(a));
+  double ds=0;for(int j=0;j<n;j++){double z=r.x[j]-(m.objective[j]+aty[j]);double p=std::min(std::max(z,m.lower[j]),m.upper[j]);double d=r.x[j]-p;ds+=d*d;}r.dual_residual=std::sqrt(ds)/(1+n2(m.objective));r.iterations=it;
+  if(std::max(r.primal_residual,r.dual_residual)<=o.tolerance){r.converged=true;break;}
+ }
+ for(int j=0;j<n;j++)r.objective+=m.objective[j]*r.x[j];r.solve_time_sec=std::chrono::duration<double>(std::chrono::steady_clock::now()-t0).count();r.status=r.converged?"OPTIMALITY_TOL_REACHED":"ITERATION_LIMIT";return r;
+}}
