@@ -33,6 +33,9 @@ struct SolverOptions {
   int max_nodes{256};
   double mip_gap{1e-4};
   double integrality_tolerance{1e-6};
+  int scaling_passes{5};
+  bool presolve{true};
+  double time_limit_sec{0.0};
 };
 struct SolverResult {
   bool converged{false};
