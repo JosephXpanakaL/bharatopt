@@ -1,71 +1,121 @@
 # BharatOpt deployment and test guide
 
-## Local CPU test
+## 1. Windows RTX 3050
 
-Requirements: C++20 compiler, CMake 3.20+ and Python 3.10+.
+Open PowerShell in the cloned repository:
 
-~~~bash
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBHARATOPT_ENABLE_CUDA=OFF
-cmake --build build -j
-ctest --test-dir build --output-on-failure
-./build/bharatopt_cli --demo
-./build/bharatopt_cli --mip-demo --max-nodes 64
-./build/bharatopt_cli --mps examples/milp_demo.mps --max-nodes 64
-~~~
+    .\setup.ps1 -Cuda
 
-## Web console
+The script configures a Release build, compiles the C++/CUDA engine, runs CTest, and executes the refinery demo.
 
-~~~bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-export BHARATOPT_BIN="$PWD/build/bharatopt_cli"
-uvicorn api:app --host 127.0.0.1 --port 8000
-~~~
+Confirm the GPU driver/CUDA installation first:
+
+    python scripts/preflight.py
+
+Then:
+
+    .\build\bharatopt_cli.exe --demo --cuda
+    .\build\bharatopt_cli.exe --mps examples/max_demo.mps --cuda
+
+The RTX 3050 path targets CUDA compute capability 8.6.
+
+## 2. CPU build
+
+Linux/macOS:
+
+    ./setup.sh
+
+Windows:
+
+    .\setup.ps1
+
+Useful direct commands:
+
+    cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBHARATOPT_ENABLE_CUDA=OFF
+    cmake --build build
+    ctest --test-dir build --output-on-failure
+
+## 3. CLI
+
+    ./build/bharatopt_cli --demo
+    ./build/bharatopt_cli --mip-demo --max-nodes 128
+    ./build/bharatopt_cli --qp-demo
+    ./build/bharatopt_cli --mps examples/refinery_blending.mps
+    ./build/bharatopt_cli --demo --json
+
+Control numerical work:
+
+    --max-iters N
+    --tol T
+    --time-limit SECONDS
+    --max-nodes N
+    --mip-gap T
+    --no-presolve
+    --scaling-passes N
+    --cuda
+
+## 4. Browser console
+
+Create the Python environment:
+
+    python -m venv .venv
+
+Linux/macOS:
+
+    source .venv/bin/activate
 
 Windows PowerShell:
 
-~~~powershell
-py -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-$env:BHARATOPT_BIN="$PWD\build\bharatopt_cli.exe"
-python -m uvicorn api:app --host 127.0.0.1 --port 8000
-~~~
+    .\.venv\Scripts\Activate.ps1
+
+Install dependencies:
+
+    pip install -r requirements.txt
+
+Set the solver binary:
+
+    export BHARATOPT_BIN="$PWD/build/bharatopt_cli"
+
+Windows PowerShell:
+
+    $env:BHARATOPT_BIN="$PWD\build\bharatopt_cli.exe"
+
+Start:
+
+    python -m uvicorn api:app --host 127.0.0.1 --port 8000
 
 Open http://127.0.0.1:8000
 
-## CPU Docker
+## 5. Docker
 
-~~~bash
-docker build -t bharatopt:cpu .
-docker run --rm -p 8000:8000 bharatopt:cpu
-~~~
+CPU:
 
-## RTX 3050 Docker
+    docker build -t bharatopt:cpu .
+    docker run --rm -p 8000:8000 bharatopt:cpu
 
-With a working NVIDIA driver and NVIDIA Container Toolkit:
+NVIDIA:
 
-~~~bash
-docker build -f Dockerfile.cuda -t bharatopt:cuda .
-docker run --rm --gpus all -p 8000:8000 bharatopt:cuda
-~~~
+    docker build -f Dockerfile.cuda -t bharatopt:cuda .
+    docker run --rm --gpus all -p 8000:8000 bharatopt:cuda
 
-Then tick Use CUDA backend in the dashboard.
+## 6. Generate a feasible stress model
 
-## Benchmark
+    python scripts/generate_refinery_benchmark.py --variables 10000 --constraints 5000 --nnz-per-row 20 --output data/refinery_10k.mps
 
-~~~bash
-./build/bharatopt_cli --demo --json
-python scripts/benchmark.py examples/refinery_blending.mps 5
-~~~
+Run:
 
-The benchmark script writes benchmark_results.csv locally. Do not commit measured numbers until the machine, CUDA driver, build type, tolerance and model set are recorded.
+    python scripts/benchmark.py data/refinery_10k.mps --repeats 5
+    python scripts/benchmark.py data/refinery_10k.mps --repeats 5 --cuda
 
-## Current boundaries
+## 7. Optional external baseline
 
-The CUDA path is a functional hybrid prototype: sparse Ax and box projection use native CUDA kernels, while A^T y remains on CPU. The current CUDA wrapper is intentionally simple and allocates device buffers per call, so it is not suitable for claiming production GPU speedups yet.
+HiGHS is a benchmark-only dependency; it is not part of the BharatOpt engine.
 
-MILP uses a small branch-and-bound layer over approximate LP relaxations. It is intended for prototype instances and is not a certificate-grade industrial MIP engine.
+    python -m pip install highspy
+    python scripts/compare_highs.py data/refinery_10k.mps --binary build/bharatopt_cli
 
-The next production step is persistent GPU-resident state with cuSPARSE/cuBLAS, followed by numerical scaling, stronger presolve/KKT validation, and a more complete MILP stack.
+HiGHS can read MPS directly through its executable or Python interface, so the comparison is based on the same model file. citeturn982299search0turn982299search1
+
+## Current technical boundary
+
+BharatOpt is now a real native optimization engine prototype, but the continuous method is still a first-order PDHG-family method and the MILP layer is experimental. It is not appropriate to claim production parity with mature industrial solvers until broader benchmark coverage, stronger presolve, simplex/interior-point methods, complete MIP certificates and extensive numerical testing are completed.
