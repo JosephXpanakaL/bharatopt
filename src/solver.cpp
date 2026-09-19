@@ -102,7 +102,7 @@ SolverResult BharatOptSolverCore::solve_milp(const LPModel&m,const SolverOptions
 
   while(!open.empty()&&!limit){
     if(exhausted()){limit=true;break;}
-    Node node=std::move(const_cast<Node&>(open.top()));open.pop();
+    Node node=open.top();open.pop();
     if(dominates_incumbent(node.bound))continue;
 
     int branch=-1;double frac=0.0;
