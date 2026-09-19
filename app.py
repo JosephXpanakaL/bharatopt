@@ -151,7 +151,7 @@ if pooling_button:
     with st.spinner("Running native SLP + McCormick pooling analysis..."):
         pooling_result = run_pooling_engine()
 
-    if pooling_result.get("status") == "SLP_CONVERGED":
+    if isinstance(pooling_result.get("slp_objective"), (int, float)) and isinstance(pooling_result.get("mccormick_bound"), (int, float)):
         st.subheader("Native Refinery Pooling Analysis")
         st.caption("These values are computed live by BharatOpt C++ SLP and McCormick engines on the built-in MRPL pooling benchmark. No UI fallback or hard-coded result is used.")
         p1, p2, p3 = st.columns(3)
