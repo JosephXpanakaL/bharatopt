@@ -18,12 +18,13 @@ pre{white-space:pre-wrap;background:#080d18;padding:16px;border-radius:10px;over
 <div class="wrap">
 <h1>BharatOpt</h1>
 <p>SIH26119 • Indigenous sparse optimization solver prototype</p>
-<div class="card"><h2>Run MRPL demo</h2><label><input id="cuda" type="checkbox"> Use CUDA backend</label><br><br><button class="primary" onclick="runDemo()">Solve demo</button></div>
+<div class="card"><h2>Run MRPL demo</h2><label><input id="cuda" type="checkbox"> Use CUDA backend</label><br><br><button class="primary" onclick="runDemo()">Solve LP demo</button> <button onclick="runQp()">Solve QP demo</button> </div>
 <div class="card"><h2>Upload MPS</h2><input id="mps" type="file" accept=".mps"><br><br><label>CUDA <input id="mpscuda" type="checkbox"></label> <button class="primary" onclick="uploadMps()">Solve MPS</button></div>
 <div id="out" class="card" style="display:none"><div class="grid" id="metrics"></div><h3>Raw result</h3><pre id="raw"></pre></div>
 </div>
 <script>
 function show(d){document.getElementById("out").style.display="block";const keys=["status","objective","best_bound","mip_gap","primal_residual","dual_residual","solve_time_sec","backend","iterations","nodes"];document.getElementById("metrics").innerHTML=keys.map(k=>'<div class="metric">'+k+'<b>'+((d[k]??"—"))+'</b></div>').join("");document.getElementById("raw").textContent=JSON.stringify(d,null,2);}
+async function runQp(){const f=new FormData();const r=await fetch("/api/solve/qp-demo",{method:"POST",body:f});show(await r.json());}
 async function runDemo(){const f=new FormData();f.append("cuda",document.getElementById("cuda").checked);const r=await fetch("/api/solve/demo",{method:"POST",body:f});show(await r.json());}
 async function uploadMps(){const file=document.getElementById("mps").files[0];if(!file)return alert("Choose an MPS file");const f=new FormData();f.append("file",file);f.append("cuda",document.getElementById("mpscuda").checked);const r=await fetch("/api/solve/mps",{method:"POST",body:f});show(await r.json());}
 </script>
