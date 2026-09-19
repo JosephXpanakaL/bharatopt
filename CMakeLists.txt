@@ -13,6 +13,7 @@ set(BHARATOPT_CORE_SOURCES
   src/qp.cpp
   src/preprocess.cpp
   src/interior_point.cpp
+  src/bounded_iis.cpp
 )
 
 if(NOT BHARATOPT_ENABLE_CUDA)
