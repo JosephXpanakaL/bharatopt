@@ -119,6 +119,9 @@ BoundedIISResult computeBoundedIIS(
     const LPModel& model,
     const FeasibilityOracle& feasibility_oracle,
     const BoundedIISOptions& options) {
+  constexpr double kHardTimeLimitSec = 2.5;
+  constexpr int kHardIterationLimit = 20;
+
   if (!feasibility_oracle) {
     throw std::invalid_argument(
         "computeBoundedIIS requires a valid feasibility oracle");
@@ -132,11 +135,16 @@ BoundedIISResult computeBoundedIIS(
         "Bounded IIS iteration limit must be positive");
   }
 
+  const double time_budget =
+      std::min(options.time_limit_sec, kHardTimeLimitSec);
+  const int iteration_budget =
+      std::min(options.max_iterations, kHardIterationLimit);
+
   BoundedIISResult result;
   const auto start = Clock::now();
   const auto deadline =
       start + std::chrono::duration_cast<Clock::duration>(
-                  std::chrono::duration<double>(options.time_limit_sec));
+                  std::chrono::duration<double>(time_budget));
 
   std::vector<int> active_rows;
   active_rows.reserve(model.A.rows);
@@ -174,7 +182,7 @@ BoundedIISResult computeBoundedIIS(
 
   bool completed_irreducibility_pass = false;
 
-  for (int pass = 0; pass < options.max_iterations; ++pass) {
+  for (int pass = 0; pass < iteration_budget; ++pass) {
     remaining = remaining_seconds(deadline);
     if (remaining <= 0.0) {
       result.status = BoundedIISStatus::TIME_LIMIT;
