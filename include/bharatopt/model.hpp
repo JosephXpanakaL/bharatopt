@@ -13,6 +13,8 @@ struct LPModel {
   std::string name;
   std::vector<std::string> var_names;
   std::vector<double> objective,lower,upper;
+  bool maximize{false};
+  double objective_offset{0.0};
   std::vector<std::uint8_t> integer;
   std::vector<ConstraintRow> rows;
   SparseMatrixCSR A;
