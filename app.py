@@ -1,6 +1,5 @@
 import streamlit as st
 import json
-import os
 import subprocess
 import tempfile
 from pathlib import Path
@@ -145,8 +144,12 @@ if uploaded_file and solve_button:
         st.subheader("Refinery Pooling (Bilinear Blending)")
         p1, p2, p3 = st.columns(3)
         p1.metric("SLP Margin (Trust Region)", f"₹ {margin:,.2f}")
-        p2.metric("McCormick Global Bound", f"₹ {margin * 0.985:,.2f}")
-        p3.metric("Non-Linear Gap", "1.50%")
+        p2.metric("McCormick Global Bound", "Not reported")
+        p3.metric("Non-Linear Gap", "Not reported")
+        st.caption(
+            "Pooling-specific SLP and McCormick certificate values are not part of "
+            "the current native CLI JSON contract, so no synthetic values are shown."
+        )
 
     elif result.get("status", "").lower() == "infeasible":
         st.error("🚨 CRITICAL: No feasible production plan exists.")
