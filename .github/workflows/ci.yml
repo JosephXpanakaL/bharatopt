@@ -1,0 +1,19 @@
+name: BharatOpt CI
+on:
+  push:
+  pull_request:
+jobs:
+  cpu:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S . -B build -DBHARATOPT_ENABLE_CUDA=OFF -DCMAKE_BUILD_TYPE=Release
+      - name: Build
+        run: cmake --build build -j2
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+      - name: Smoke test LP
+        run: ./build/bharatopt_cli --demo
+      - name: Smoke test MILP
+        run: ./build/bharatopt_cli --mip-demo --max-nodes 64
