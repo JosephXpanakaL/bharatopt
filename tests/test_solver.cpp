@@ -1,6 +1,7 @@
 #include "bharatopt/mps.hpp"
 #include "bharatopt/qp.hpp"
 #include "bharatopt/solver.hpp"
+#include "bharatopt/interior_point.hpp"
 #include <cassert>
 #include <cmath>
 #include <cstdio>
@@ -13,6 +14,9 @@ int main(){
   auto lp=bharatopt::make_refinery_demo();auto r=s.solve_lp(lp,o);
   assert(r.converged);assert(std::isfinite(r.objective));assert(r.primal_residual<=1e-4);
   assert(std::abs(r.objective-72.0)<0.25);
+
+  auto ip=bharatopt::solve_interior_point(lp,{80,1e-7,400,400});
+  assert(ip.converged);assert(std::isfinite(ip.objective));assert(std::abs(ip.objective-72.0)<0.25);
 
   auto mip=bharatopt::make_milp_demo();o.max_nodes=128;o.mip_gap=1e-3;
   auto mr=s.solve_milp(mip,o);
