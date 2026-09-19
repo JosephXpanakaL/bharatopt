@@ -9,9 +9,10 @@ st.set_page_config(page_title="BharatOpt | MRPL", page_icon="🛢️", layout="w
 
 # --- CORE CLI BRIDGE ---
 def solve_with_bharatopt_cli(uploaded_file, timeout_seconds=15.0):
-    exe = Path("./build-cuda/bharatopt") # Adjust if your executable is named/located differently
-    if not exe.exists():
-        exe = Path("./bharatopt") # Fallback
+    exe_candidates = [Path("./build-cuda/bharatopt"), Path("./build-cuda/bharatopt.exe"), Path("./bharatopt"), Path("./bharatopt.exe")]
+    exe = next((candidate for candidate in exe_candidates if candidate.exists()), None)
+    if exe is None:
+        return {"status": "CRASH", "error": "bharatopt executable not found. Expected ./build-cuda/bharatopt or ./build-cuda/bharatopt.exe."}
         
     suffix = Path(uploaded_file.name).suffix.lower()
     
@@ -40,7 +41,7 @@ st.caption("TEAM NOVAKIN • SIH26119 • Indigenous Refinery Optimization Engin
 
 with st.sidebar:
     st.header("Refinery Configuration")
-    uploaded_file = st.file_uploader("Upload Model (.mps / .nl)", type=["mps", "nl"])
+    uploaded_file = st.file_uploader("Upload Model (.mps / .nl)", type=["mps"])
     solve_button = st.button("Run Optimizer", type="primary", use_container_width=True)
     
     st.divider()
