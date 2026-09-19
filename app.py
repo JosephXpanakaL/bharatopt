@@ -14,10 +14,7 @@ EXECUTABLE = BUILD_DIR / "bharatopt"
 @st.cache_resource(show_spinner=False)
 def ensure_bharatopt_engine():
     """Build the native CPU engine once per Streamlit runtime."""
-    if EXECUTABLE.exists():
-        return EXECUTABLE, None
-
-    configure = [
+    # Always run the incremental native build once per Streamlit runtime.\n    # This prevents a persistent build directory from keeping an older CLI\n    # binary after a new C++ source revision is deployed.\n    configure = [
         "cmake",
         "-S", str(PROJECT_ROOT),
         "-B", str(BUILD_DIR),
