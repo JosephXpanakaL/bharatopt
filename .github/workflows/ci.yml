@@ -32,3 +32,16 @@ jobs:
       - name: Compile CUDA backend
         run: |
           docker run --rm -v "$PWD:/src" -w /src nvidia/cuda:12.6.3-devel-ubuntu24.04 bash -lc             "apt-get update -qq && apt-get install -y -qq cmake && cmake -S . -B build-cuda -DBHARATOPT_ENABLE_CUDA=ON -DCMAKE_BUILD_TYPE=Release && cmake --build build-cuda -j2"
+
+  sanitizer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure ASan/UBSan
+        run: cmake -S . -B build-asan -DBHARATOPT_ENABLE_CUDA=OFF -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer"
+      - name: Build
+        run: cmake --build build-asan -j2
+      - name: Sanitized tests
+        env:
+          ASAN_OPTIONS: detect_leaks=0:abort_on_error=1
+        run: ./build-asan/bharatopt_tests
