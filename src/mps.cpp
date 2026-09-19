@@ -16,7 +16,7 @@ bool has_marker(const std::vector<std::string>&t,const char*marker){for(const au
 LPModel parse_mps(const std::string&path){
  std::ifstream in(path);if(!in)throw std::runtime_error("Cannot open MPS file: "+path);
  LPModel m;enum class Sec{NONE,OBJSENSE,OBJNAME,ROWS,COLUMNS,RHS,RANGES,BOUNDS,OTHER};Sec sec=Sec::NONE;
- std::vector<std::tuple<std::string,std::string,double>> entries;std::vector<double> ranges;std::unordered_map<std::string,int>vi,ri;std::string obj;bool integer_mode=false;bool saw_obj_sense=false;
+ std::vector<std::tuple<std::string,std::string,double>> entries;std::vector<double> ranges;std::unordered_map<std::string,int>vi,ri;std::string obj;std::string rhs_vector,range_vector,bound_vector;bool integer_mode=false;
  std::string line;
  while(std::getline(in,line)){
   if(line.empty()||line[0]=='*')continue;auto t=split(line);if(t.empty())continue;
@@ -42,12 +42,16 @@ LPModel parse_mps(const std::string&path){
    int j=vi[var];
    for(std::size_t k=1;k+1<t.size();k+=2){double value=std::stod(t[k+1]);if(t[k]==obj)m.objective[j]+=value;else entries.emplace_back(t[k],var,value);}
   }else if(sec==Sec::RHS){
-   for(std::size_t k=1;k+1<t.size();k+=2){auto it=ri.find(t[k]);if(it!=ri.end()){m.rows[it->second].rhs=std::stod(t[k+1]);}}
-   // If an objective row receives an RHS value, MPS readers commonly interpret it as an objective offset.
-   if(!obj.empty())for(std::size_t k=1;k+1<t.size();k+=2)if(t[k]==obj)m.objective_offset-=std::stod(t[k+1]);
+   if(rhs_vector.empty())rhs_vector=t[0];
+   if(t[0]!=rhs_vector)continue;
+   for(std::size_t k=1;k+1<t.size();k+=2){auto it=ri.find(t[k]);if(it!=ri.end())m.rows[it->second].rhs=std::stod(t[k+1]);else if(t[k]==obj)m.objective_offset-=std::stod(t[k+1]);}
   }else if(sec==Sec::RANGES){
+   if(range_vector.empty())range_vector=t[0];
+   if(t[0]!=range_vector)continue;
    for(std::size_t k=1;k+1<t.size();k+=2){auto it=ri.find(t[k]);if(it!=ri.end())ranges[it->second]=std::stod(t[k+1]);}
   }else if(sec==Sec::BOUNDS){
+   if(bound_vector.empty())bound_vector=t[1];
+   if(t[1]!=bound_vector)continue;
    if(t.size()<3)continue;std::string type=t[0],var=t[2];
    if(!vi.count(var)){int id=(int)m.var_names.size();vi[var]=id;m.var_names.push_back(var);m.objective.push_back(0.0);m.lower.push_back(0.0);m.upper.push_back(INF);m.integer.push_back(0);}
    int j=vi[var];double v=t.size()>3?std::stod(t[3]):0.0;
