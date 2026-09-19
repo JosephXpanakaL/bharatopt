@@ -1,4 +1,5 @@
 #include "bharatopt/mps.hpp"
+#include "bharatopt/pooling.hpp"
 #include "bharatopt/interior_point.hpp"
 #include "bharatopt/qp.hpp"
 #include "bharatopt/solver.hpp"
@@ -42,6 +43,67 @@ static double integration_gap(const bharatopt::SolverResult& r) {
     return 0.0;
 }
 
+static void write_pooling_json(
+    const std::string& path,
+    const bharatopt::PoolingSLPResult& slp,
+    const bharatopt::McCormickRelaxation& mc) {
+    std::ofstream out(path);
+    if (!out) throw std::runtime_error("Cannot open output file: " + path);
+
+    const double bound = mc.solve_result.objective;
+    double gap = std::numeric_limits<double>::quiet_NaN();
+    if (std::isfinite(bound) && std::isfinite(slp.objective)) {
+        if (slp.objective >= 0.0) {
+            gap = std::max(0.0, bound - slp.objective) /
+                  (1.0 + std::abs(slp.objective));
+        } else {
+            gap = std::max(0.0, slp.objective - bound) /
+                  (1.0 + std::abs(slp.objective));
+        }
+    }
+
+    out << "{";
+    out << "\"status\":" << js(slp.status);
+    out << ",\"slp_objective\":"; jnum(out, slp.objective);
+    out << ",\"mccormick_bound\":"; jnum(out, bound);
+    out << ",\"nonlinear_gap\":"; jnum(out, gap);
+    out << ",\"slp_iterations\":" << slp.iterations;
+    out << ",\"accepted_steps\":" << slp.accepted_steps;
+    out << ",\"rejected_steps\":" << slp.rejected_steps;
+    out << ",\"trust_radius\":"; jnum(out, slp.trust_radius);
+    out << ",\"improvement_ratio\":"; jnum(out, slp.improvement_ratio);
+    out << ",\"mccormick_status\":" << js(mc.solve_result.status);
+    out << ",\"mccormick_converged\":" << (mc.solve_result.converged ? "true" : "false");
+    out << "}\n";
+
+    if (!out) throw std::runtime_error("Failed writing pooling output: " + path);
+}
+
+static bharatopt::PoolingModel make_mrpl_pooling_model() {
+    bharatopt::PoolingModel model;
+    model.name = "MRPL-pooling-integration-model";
+    model.linear.name = model.name;
+    model.linear.var_names = {"light_crude", "heavy_crude"};
+    model.linear.objective = {100.0, 80.0};
+    model.linear.lower = {2.0, 2.0};
+    model.linear.upper = {10.0, 10.0};
+    model.linear.integer = {0, 0};
+    model.linear.maximize = true;
+    model.linear.rows = {
+        {"throughput", bharatopt::RowSense::LessEqual, 12.0}
+    };
+    model.linear.A.rows = 1;
+    model.linear.A.cols = 2;
+    model.linear.A.row_ptr = {0, 2};
+    model.linear.A.col_index = {0, 1};
+    model.linear.A.values = {1.0, 1.0};
+    model.linear.row_lower = {-bharatopt::INF};
+    model.linear.row_upper = {12.0};
+    model.objective_bilinear.push_back({0, 1, 5.0});
+    model.constraint_bilinear.resize(1);
+    return model;
+}
+
 static void write_contract_json(
     const std::string& path,
     const bharatopt::SolverResult& r) {
@@ -60,7 +122,7 @@ static void write_contract_json(
 }
 
 int main(int argc, char** argv) {
-    bool demo = false, mip_demo = false, qp_demo = false, ip = false;
+    bool demo = false, mip_demo = false, qp_demo = false, ip = false, pooling_demo = false;
     bool use_cuda = false, json = false, lp_only = false;
     std::string mps, output_path, mode;
 
@@ -77,6 +139,8 @@ int main(int argc, char** argv) {
             mip_demo = true;
         } else if (a == "--qp-demo") {
             qp_demo = true;
+        } else if (a == "--pooling-demo") {
+            pooling_demo = true;
         } else if (a == "--ip") {
             ip = true;
         } else if (a == "--cuda") {
@@ -120,6 +184,60 @@ int main(int argc, char** argv) {
         bharatopt::BharatOptSolverCore solver;
         opt.use_cuda = use_cuda;
 
+        if (pooling_demo) {
+            auto model = make_mrpl_pooling_model();
+
+            bharatopt::PoolingSLPOptions pooling_options;
+            pooling_options.lp_options = opt;
+            pooling_options.max_iterations = 20;
+            pooling_options.initial_trust_radius = 1.0;
+            pooling_options.minimum_trust_radius = 1e-8;
+            pooling_options.maximum_trust_radius = 8.0;
+
+            auto slp = bharatopt::solve_pooling_slp(
+                model, solver, pooling_options);
+            auto mc = bharatopt::solve_mccormick_relaxation(
+                model, solver, opt);
+
+            if (!output_path.empty()) {
+                write_pooling_json(output_path, slp, mc);
+            } else if (json) {
+                const double bound = mc.solve_result.objective;
+                double gap = std::numeric_limits<double>::quiet_NaN();
+                if (std::isfinite(bound) && std::isfinite(slp.objective)) {
+                    gap = std::max(0.0, bound - slp.objective) /
+                          (1.0 + std::abs(slp.objective));
+                }
+                std::cout << "{\"status\":" << js(slp.status)
+                          << ",\"slp_objective\":"; jnum(std::cout, slp.objective);
+                std::cout << ",\"mccormick_bound\":"; jnum(std::cout, bound);
+                std::cout << ",\"nonlinear_gap\":"; jnum(std::cout, gap);
+                std::cout << ",\"slp_iterations\":" << slp.iterations;
+                std::cout << ",\"accepted_steps\":" << slp.accepted_steps;
+                std::cout << ",\"rejected_steps\":" << slp.rejected_steps;
+                std::cout << ",\"trust_radius\":"; jnum(std::cout, slp.trust_radius);
+                std::cout << ",\"improvement_ratio\":"; jnum(std::cout, slp.improvement_ratio);
+                std::cout << ",\"mccormick_status\":" << js(mc.solve_result.status);
+                std::cout << ",\"mccormick_converged\":"
+                          << (mc.solve_result.converged ? "true" : "false")
+                          << "}\n";
+            } else {
+                std::cout << "BharatOpt | model=" << model.name << "\n";
+                std::cout << "SLP status=" << slp.status
+                          << " objective=" << slp.objective
+                          << " iterations=" << slp.iterations
+                          << " accepted=" << slp.accepted_steps
+                          << " rejected=" << slp.rejected_steps
+                          << " trust_radius=" << slp.trust_radius << "\n";
+                std::cout << "McCormick status=" << mc.solve_result.status
+                          << " bound=" << mc.solve_result.objective
+                          << " converged=" << mc.solve_result.converged << "\n";
+            }
+
+            return (slp.feasible && std::isfinite(slp.objective) &&
+                    std::isfinite(mc.solve_result.objective)) ? 0 : 3;
+        }
+
         if (qp_demo) {
             auto q = bharatopt::make_qp_demo();
             auto r = solver.solve_qp(q, opt);
@@ -157,7 +275,7 @@ int main(int argc, char** argv) {
         } else if (!mps.empty()) {
             m = bharatopt::parse_mps(mps);
         } else {
-            std::cerr << "Use --demo, --mip-demo, --qp-demo, --ip or --input file.mps\n";
+            std::cerr << "Use --demo, --mip-demo, --qp-demo, --pooling-demo, --ip or --input file.mps\n";
             return 2;
         }
 
