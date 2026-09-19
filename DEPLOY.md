@@ -40,6 +40,7 @@ Useful direct commands:
     ./build/bharatopt_cli --demo
     ./build/bharatopt_cli --mip-demo --max-nodes 128
     ./build/bharatopt_cli --qp-demo
+    ./build/bharatopt_cli --demo --ip
     ./build/bharatopt_cli --mps examples/refinery_blending.mps
     ./build/bharatopt_cli --demo --json
 
