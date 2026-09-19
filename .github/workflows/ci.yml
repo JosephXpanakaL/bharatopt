@@ -19,3 +19,7 @@ jobs:
         run: ./build/bharatopt_cli --mip-demo --max-nodes 64
       - name: Smoke test QP
         run: ./build/bharatopt_cli --qp-demo
+      - name: Check JSON output
+        run: ./build/bharatopt_cli --demo --json | python3 -c 'import json,sys; json.load(sys.stdin); print("valid JSON")'
+      - name: Check Python
+        run: python3 -m py_compile api.py scripts/benchmark.py
