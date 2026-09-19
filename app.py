@@ -132,23 +132,29 @@ if uploaded_file and solve_button:
         st.success("Feasible production plan found.")
 
         c1, c2, c3 = st.columns(3)
-        margin = result.get("objective", 0.0)
-        safe_bound = result.get("certified_lower_bound", margin * 0.9998)
-        gap = result.get("relative_gap", 0.00012)
+        objective = result.get("objective")
+        safe_bound = result.get("certified_lower_bound")
+        gap = result.get("relative_gap")
 
-        c1.metric("Estimated Margin", f"₹ {margin:,.2f}")
-        c2.metric("Certified Lower Bound", f"₹ {safe_bound:,.2f}")
-        c3.metric("Provable Gap", f"{gap * 100:.4f}%")
+        c1.metric(
+            "Solver Objective",
+            f"₹ {objective:,.2f}" if isinstance(objective, (int, float)) else "Not reported",
+        )
+        c2.metric(
+            "Certified Lower Bound",
+            f"₹ {safe_bound:,.2f}" if isinstance(safe_bound, (int, float)) else "Not reported",
+        )
+        c3.metric(
+            "Provable Gap",
+            f"{gap * 100:.4f}%" if isinstance(gap, (int, float)) else "Not reported",
+        )
 
         st.divider()
         st.subheader("Refinery Pooling (Bilinear Blending)")
-        p1, p2, p3 = st.columns(3)
-        p1.metric("SLP Margin (Trust Region)", f"₹ {margin:,.2f}")
-        p2.metric("McCormick Global Bound", "Not reported")
-        p3.metric("Non-Linear Gap", "Not reported")
-        st.caption(
-            "Pooling-specific SLP and McCormick certificate values are not part of "
-            "the current native CLI JSON contract, so no synthetic values are shown."
+        st.info(
+            "Pooling-specific SLP, McCormick global-bound, and nonlinear-gap values "
+            "are not produced by the current MPS CLI solve. They are intentionally "
+            "not estimated or filled with demo values."
         )
 
     elif result.get("status", "").lower() == "infeasible":
@@ -179,12 +185,12 @@ if uploaded_file and solve_button:
 
         with st.expander("View Raw Farkas Certificate (Debugging)"):
             farkas_data = result.get("farkas_multipliers", [])
-            if not farkas_data:
-                farkas_data = [
-                    {"row": 17, "multiplier": 4.812},
-                    {"row": 29, "multiplier": -3.921},
-                ]
-            st.json(farkas_data)
+            if farkas_data:
+                st.json(farkas_data)
+            else:
+                st.info(
+                    "No Farkas multipliers were returned by the native solver for this run."
+                )
 
     else:
         st.error(f"Solver Terminated Unexpectedly: {result.get('status')}")
