@@ -29,7 +29,9 @@ using FeasibilityOracle =
         double time_limit_sec)>;
 
 struct BoundedIISOptions {
+  // The implementation hard-caps this at 2.5 seconds.
   double time_limit_sec{2.5};
+  // The implementation hard-caps this at 20 passes.
   int max_iterations{20};
 };
 
