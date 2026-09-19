@@ -4,4 +4,5 @@
 namespace bharatopt {
 LPModel parse_mps(const std::string& path);
 LPModel make_refinery_demo();
+LPModel make_milp_demo();
 }
