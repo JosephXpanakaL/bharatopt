@@ -37,15 +37,15 @@ def home():
     return FileResponse(WEB)
 
 @app.post("/api/solve/demo")
-def solve_demo(cuda: bool = Form(False), max_iters: int = Form(50000), tolerance: float = Form(1e-6)):
-    args = ["--demo", "--max-iters", str(max_iters), "--tol", str(tolerance)]
+def solve_demo(cuda: bool = Form(False), max_iters: int = Form(50000), tolerance: float = Form(1e-6), time_limit: float = Form(0.0)):
+    args = ["--demo", "--max-iters", str(max_iters), "--tol", str(tolerance), "--time-limit", str(time_limit)]
     if cuda: args.append("--cuda")
     return run_solver(args)
 
 @app.post("/api/solve/mps")
 async def solve_mps(file: UploadFile = File(...), cuda: bool = Form(False),
                     max_iters: int = Form(50000), tolerance: float = Form(1e-6),
-                    max_nodes: int = Form(256), mip_gap: float = Form(1e-4)):
+                    max_nodes: int = Form(256), mip_gap: float = Form(1e-4), time_limit: float = Form(0.0)):
     name = Path(file.filename or "model.mps").name
     if not name.lower().endswith(".mps"):
         raise HTTPException(status_code=400, detail="Upload an .mps file")
@@ -56,7 +56,7 @@ async def solve_mps(file: UploadFile = File(...), cuda: bool = Form(False),
         path = Path(td) / name
         path.write_bytes(content)
         args = ["--mps", str(path), "--max-iters", str(max_iters), "--tol", str(tolerance),
-                "--max-nodes", str(max_nodes), "--mip-gap", str(mip_gap)]
+                "--max-nodes", str(max_nodes), "--mip-gap", str(mip_gap), "--time-limit", str(time_limit)]
         if cuda: args.append("--cuda")
         return run_solver(args)
 
