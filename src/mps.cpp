@@ -76,7 +76,7 @@ LPModel parse_mps(const std::string& path){
 LPModel make_refinery_demo(){
   LPModel m;m.name="MRPL-refinery-blending-demo";m.var_names={"crude_A","crude_B"};m.objective={12,9};m.lower={0,0};m.upper={10,10};m.integer={0,0};
   m.rows={{"sulfur",RowSense::LessEqual,3.5},{"capacity",RowSense::LessEqual,10},{"demand",RowSense::GreaterEqual,8}};
-  m.A.rows=3;m.A.cols=2;m.A.row_ptr={0,2,4,6};m.A.col_index={0,1,0,1,0,1};m.A.values={1,2.5,1,1,1,1};m.row_lower={-INF,-INF,8};m.row_upper={3.5,10,INF};return m;
+  m.A.rows=3;m.A.cols=2;m.A.row_ptr={0,2,4,6};m.A.col_index={0,1,0,1,0,1};m.A.values={0.2,0.35,1,1,1,1};m.row_lower={-INF,-INF,8};m.row_upper={3.5,10,INF};return m;
 }
 LPModel make_milp_demo(){
   LPModel m;m.name="MRPL-batch-selection-milp-demo";
