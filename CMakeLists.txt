@@ -11,6 +11,7 @@ set(BHARATOPT_CORE_SOURCES
   src/mps.cpp
   src/solver.cpp
   src/qp.cpp
+  src/preprocess.cpp
 )
 
 if(NOT BHARATOPT_ENABLE_CUDA)
