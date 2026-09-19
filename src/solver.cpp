@@ -15,7 +15,7 @@ void proj(std::vector<double>&v,const std::vector<double>&lo,const std::vector<d
 void Ax(const SparseMatrixCSR&A,const std::vector<double>&x,std::vector<double>&y){y.assign(A.rows,0.0);for(std::size_t i=0;i<A.rows;i++){double s=0;for(int k=A.row_ptr[i];k<A.row_ptr[i+1];k++)s+=A.values[k]*x[A.col_index[k]];y[i]=s;}}
 void ATy(const SparseMatrixCSR&A,const std::vector<double>&y,std::vector<double>&x){x.assign(A.cols,0.0);for(std::size_t i=0;i<A.rows;i++)for(int k=A.row_ptr[i];k<A.row_ptr[i+1];k++)x[A.col_index[k]]+=A.values[k]*y[i];}
 double opnorm(const SparseMatrixCSR&A){if(A.cols==0)return 0;std::vector<double>x(A.cols,1.0),y,z;for(int it=0;it<12;it++){Ax(A,x,y);ATy(A,y,z);double q=n2(z);if(!std::isfinite(q)||q==0)return 0;for(double&v:z)v/=q;x=z;}Ax(A,x,y);return n2(y)/std::max(n2(x),1e-30);}
-void certify_original(const LPModel&orig,SolverResult&r){std::vector<double>ax;Ax(orig,r.x,ax);double viol=0;for(std::size_t i=0;i<orig.A.rows;i++){double w=0; if(ax[i]<orig.row_lower[i])w=orig.row_lower[i]-ax[i];else if(ax[i]>orig.row_upper[i])w=ax[i]-orig.row_upper[i];viol+=w*w;}r.primal_residual=std::sqrt(viol)/(1.0+n2(ax));r.objective=0;for(std::size_t j=0;j<r.x.size();j++)r.objective+=orig.objective[j]*r.x[j];r.best_bound=r.objective;}
+void certify_original(const LPModel&orig,SolverResult&r){std::vector<double>ax;Ax(orig,r.x,ax);double viol=0;for(std::size_t i=0;i<orig.A.rows;i++){double w=0; if(ax[i]<orig.row_lower[i])w=orig.row_lower[i]-ax[i];else if(ax[i]>orig.row_upper[i])w=ax[i]-orig.row_upper[i];viol+=w*w;}r.primal_residual=std::sqrt(viol)/(1.0+n2(ax));double internal=0;for(std::size_t j=0;j<r.x.size();j++)internal+=orig.objective[j]*r.x[j];r.objective=(orig.maximize?-internal:internal)+orig.objective_offset;r.best_bound=r.objective;}
 bool finite_solution(const SolverResult&r){return !r.x.empty()&&std::isfinite(r.objective)&&std::isfinite(r.primal_residual)&&std::isfinite(r.dual_residual);}
 bool integer_feasible(const LPModel&m,const std::vector<double>&x,double tol,int&branch){branch=-1;for(std::size_t i=0;i<m.integer.size();i++)if(m.integer[i]){double n=std::round(x[i]);if(std::abs(x[i]-n)>tol){branch=(int)i;return false;}}return true;}
 }
@@ -55,7 +55,7 @@ SolverResult BharatOptSolverCore::solve_lp(const LPModel&input,const SolverOptio
   return r;
 }
 SolverResult BharatOptSolverCore::solve_milp(const LPModel&m,const SolverOptions&o){
-  auto t0=std::chrono::steady_clock::now();SolverResult out;out.backend="CPU-branch-and-bound";out.x.assign(m.A.cols,0);double incumbent=INF,best_bound=INF;std::size_t nodes=0;bool limit=false;
+  auto t0=std::chrono::steady_clock::now();SolverResult out;out.backend="CPU-branch-and-bound";out.x.assign(m.A.cols,0);double incumbent=m.maximize?-INF:INF,best_bound=m.maximize?-INF:INF;std::size_t nodes=0;bool limit=false;
   std::function<void(const LPModel&)>dfs=[&](const LPModel&node){
     if(nodes>=(std::size_t)std::max(1,o.max_nodes)){limit=true;return;}
     if(o.time_limit_sec>0&&std::chrono::duration<double>(std::chrono::steady_clock::now()-t0).count()>=o.time_limit_sec){limit=true;return;}
@@ -65,14 +65,14 @@ SolverResult BharatOptSolverCore::solve_milp(const LPModel&m,const SolverOptions
     if(rr.status=="INFEASIBLE_PRESOLVE"||!finite_solution(rr)||!rr.converged)return;
     best_bound=std::min(best_bound,rr.objective);
     if(rr.objective>=incumbent-o.integrality_tolerance)return;
-    int branch=-1;if(integer_feasible(node,rr.x,o.integrality_tolerance,branch)){if(rr.objective<incumbent){incumbent=rr.objective;out.x=rr.x;}return;}
+    int branch=-1;if(integer_feasible(node,rr.x,o.integrality_tolerance,branch)){if((!m.maximize&&rr.objective<incumbent)||(m.maximize&&rr.objective>incumbent)){incumbent=rr.objective;out.x=rr.x;}return;}
     if(branch<0)return;
     double v=rr.x[branch],fl=std::floor(v),ce=std::ceil(v);
     if(fl>=node.lower[branch]){LPModel left=node;left.upper[branch]=std::min(left.upper[branch],fl);if(left.lower[branch]<=left.upper[branch])dfs(left);}
     if(ce<=node.upper[branch]){LPModel right=node;right.lower[branch]=std::max(right.lower[branch],ce);if(right.lower[branch]<=right.upper[branch])dfs(right);}
   };
   dfs(m);out.nodes=nodes;out.iterations=(int)nodes;out.best_bound=best_bound;out.objective=incumbent;
-  if(std::isfinite(incumbent)){out.mip_gap=std::isfinite(best_bound)?std::max(0.0,(incumbent-best_bound)/(1+std::abs(incumbent))):INF;out.converged=!limit&&out.mip_gap<=o.mip_gap;out.status=out.converged?"MIP_OPTIMALITY_GAP_REACHED":(limit?"MIP_LIMIT":"MIP_INCUMBENT_FOUND");}
+  if(std::isfinite(incumbent)){out.mip_gap=std::isfinite(best_bound)?std::abs(incumbent-best_bound)/(1+std::abs(incumbent)):INF;out.converged=!limit&&out.mip_gap<=o.mip_gap;out.status=out.converged?"MIP_OPTIMALITY_GAP_REACHED":(limit?"MIP_LIMIT":"MIP_INCUMBENT_FOUND");}
   else out.status=limit?"MIP_LIMIT_NO_INCUMBENT":"MIP_NO_FEASIBLE_INCUMBENT";
   out.primal_residual=0;out.dual_residual=0;out.solve_time_sec=std::chrono::duration<double>(std::chrono::steady_clock::now()-t0).count();return out;
 }
