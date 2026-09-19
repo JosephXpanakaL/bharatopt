@@ -35,6 +35,11 @@ BharatOpt is a from-scratch sparse mathematical optimization engine. The core is
 - Projected primal-dual iterations with the quadratic gradient term.
 - QP demo and regression test.
 
+### Interior point
+- Small-model Mehrotra predictor-corrector primal-dual method.
+- Standard-form transformation for bounds, interval constraints, slacks and free-variable splitting.
+- Sparse model input is accepted, with dense normal-equation factorization intentionally limited to small instances.
+
 ### GPU
 The NVIDIA path is GPU-resident PDHG:
 - CSR matrix and solver vectors uploaded once.
@@ -53,6 +58,7 @@ Linux/macOS CPU:
     ./build/bharatopt_cli --demo
     ./build/bharatopt_cli --mip-demo
     ./build/bharatopt_cli --qp-demo
+    ./build/bharatopt_cli --demo --ip
 
 Windows PowerShell:
     .\setup.ps1
