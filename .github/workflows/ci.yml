@@ -17,3 +17,5 @@ jobs:
         run: ./build/bharatopt_cli --demo
       - name: Smoke test MILP
         run: ./build/bharatopt_cli --mip-demo --max-nodes 64
+      - name: Smoke test QP
+        run: ./build/bharatopt_cli --qp-demo
