@@ -42,8 +42,9 @@ if(BHARATOPT_ENABLE_CUDA)
   target_link_libraries(bharatopt PUBLIC bharatopt_cuda)
 endif()
 
-add_executable(bharatopt src/main.cpp)
-target_link_libraries(bharatopt PRIVATE bharatopt)
+add_executable(bharatopt_cli src/main.cpp)
+set_target_properties(bharatopt_cli PROPERTIES OUTPUT_NAME bharatopt)
+target_link_libraries(bharatopt_cli PRIVATE bharatopt)
 
 enable_testing()
 add_executable(bharatopt_tests tests/test_solver.cpp)
@@ -55,7 +56,7 @@ target_link_libraries(bharatopt_bounded_iis_tests PRIVATE bharatopt)
 add_test(NAME bharatopt_bounded_iis_tests COMMAND bharatopt_bounded_iis_tests)
 
 include(GNUInstallDirs)
-install(TARGETS bharatopt
+install(TARGETS bharatopt bharatopt_cli
   ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
   RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
