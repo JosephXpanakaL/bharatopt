@@ -63,8 +63,8 @@ SolverResult BharatOptSolverCore::solve_milp(const LPModel&m,const SolverOptions
     SolverOptions lp=o;lp.use_cuda=false;lp.max_iterations=std::min(o.max_iterations,20000);lp.time_limit_sec=0.0;
     auto rr=solve_lp(node,lp);
     if(rr.status=="INFEASIBLE_PRESOLVE"||!finite_solution(rr)||!rr.converged)return;
-    best_bound=std::min(best_bound,rr.objective);
-    if(rr.objective>=incumbent-o.integrality_tolerance)return;
+    best_bound=m.maximize?std::max(best_bound,rr.objective):std::min(best_bound,rr.objective);
+    if((!m.maximize&&rr.objective>=incumbent-o.integrality_tolerance)||(m.maximize&&rr.objective<=incumbent+o.integrality_tolerance))return;
     int branch=-1;if(integer_feasible(node,rr.x,o.integrality_tolerance,branch)){if((!m.maximize&&rr.objective<incumbent)||(m.maximize&&rr.objective>incumbent)){incumbent=rr.objective;out.x=rr.x;}return;}
     if(branch<0)return;
     double v=rr.x[branch],fl=std::floor(v),ce=std::ceil(v);
