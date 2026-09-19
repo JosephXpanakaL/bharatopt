@@ -5,9 +5,9 @@ ROWS
  L  CAPACITY
  G  DEMAND
 COLUMNS
-    CRUDE_A   COST       12.0   SULFUR       1.0
+    CRUDE_A   COST       12.0   SULFUR       0.20
     CRUDE_A   CAPACITY   1.0    DEMAND       1.0
-    CRUDE_B   COST       9.0    SULFUR       2.5
+    CRUDE_B   COST       9.0    SULFUR       0.35
     CRUDE_B   CAPACITY   1.0    DEMAND       1.0
 RHS
     RHS1      SULFUR     3.5
