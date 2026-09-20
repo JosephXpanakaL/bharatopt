@@ -19,7 +19,7 @@
     {
       "name": "throughput",
       "sense": "<=",
-      "rhs": 12,
+      "rhs": 16,
       "linear": {
         "light_crude": 1,
         "heavy_crude": 1,
