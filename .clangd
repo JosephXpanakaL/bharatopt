@@ -1,7 +1,21 @@
 CompileFlags:
   Add:
+    - --target=x86_64-linux-gnu
+    - -isystem
+    - //wsl.localhost/Ubuntu-26.04/usr/include/c++/15
+    - -isystem
+    - //wsl.localhost/Ubuntu-26.04/usr/include/x86_64-linux-gnu/c++/15
+    - -isystem
+    - //wsl.localhost/Ubuntu-26.04/usr/include
+    - -isystem
+    - //wsl.localhost/Ubuntu-26.04/usr/include/x86_64-linux-gnu
     - -xc++
     - -std=c++20
     - -Iinclude
     - -Iinclude/nlohmann
     - -Wno-unknown-pragmas
+
+Diagnostics:
+  Suppress:
+    - pp_file_not_found
+    - drv_unknown_argument
