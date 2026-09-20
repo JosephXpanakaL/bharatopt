@@ -5,10 +5,12 @@ param(
 
 $ErrorActionPreference = "Stop"
 $buildType = if ($DebugBuild) { "Debug" } else { "Release" }
-$cudaFlag = if ($Cuda) { "-DBHARATOPT_ENABLE_CUDA=ON" } else { "-DBHARATOPT_ENABLE_CUDA=OFF" }
-
 Write-Host "== BharatOpt build =="
-cmake -S . -B build "-DCMAKE_BUILD_TYPE=$buildType" $cudaFlag
+if ($Cuda) {
+  cmake -S . -B build "-DCMAKE_BUILD_TYPE=$buildType" -DBHARATOPT_ENABLE_CUDA=ON
+} else {
+  cmake -S . -B build "-DCMAKE_BUILD_TYPE=$buildType" -DBHARATOPT_ENABLE_CUDA=OFF
+}
 cmake --build build --config $buildType
 ctest --test-dir build --build-config $buildType --output-on-failure
 
