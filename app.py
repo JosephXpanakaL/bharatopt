@@ -167,7 +167,10 @@ if uploaded_file and solve_button:
         result = solve_with_bharatopt_cli(uploaded_file)
 
     if result.get("status", "").lower() in ["optimal", "feasible", "globally_certified_within_tolerance", "global_optimal_within_tolerance"]:
-        if result.get("global_optimality_certified"):\n            st.success("Global optimum certified within the configured tolerance.")\n        else:\n            st.success("Feasible production plan found; global certification not reached within the search limits.")
+        if result.get("global_optimality_certified"):
+            st.success("Global optimum certified within the configured tolerance.")
+        else:
+            st.success("Feasible production plan found; global certification not reached within the search limits.")
 
         c1, c2, c3 = st.columns(3)
         objective = result.get("objective")
