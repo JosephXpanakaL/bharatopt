@@ -31,6 +31,7 @@ set(BHARATOPT_CORE_SOURCES
   src/refinery_model.cpp
   src/refinery_planner.cpp
   src/simplex.cpp
+  src/lp_writer.cpp
 )
 
 if(NOT BHARATOPT_ENABLE_CUDA)
