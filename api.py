@@ -88,3 +88,29 @@ async def solve_mps(file: UploadFile = File(...), cuda: bool = Form(False),
 @app.post("/api/solve/qp-demo")
 def solve_qp_demo(max_iters: int = Form(50000), tolerance: float = Form(1e-6)):
     return run_solver(["--qp-demo", "--max-iters", str(max_iters), "--tol", str(tolerance)])
+
+@app.post("/api/solve/flowsheet")
+async def solve_flowsheet(
+    file: UploadFile = File(...),
+    global_nodes: int = Form(200),
+    global_gap: float = Form(1e-5),
+    time_limit: float = Form(30.0)
+):
+    name = Path(file.filename or "flowsheet.json").name
+    if not name.lower().endswith(".json"):
+        raise HTTPException(status_code=400, detail="Upload a refinery flowsheet .json file")
+    content = await file.read()
+    if len(content) > 20 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="File exceeds 20 MiB limit")
+    with tempfile.TemporaryDirectory(prefix="bharatopt-flowsheet-") as td:
+        path = Path(td) / name
+        path.write_bytes(content)
+        args = [
+            "--refinery-json", str(path),
+            "--mode", "certified",
+            "--global-nodes", str(global_nodes),
+            "--global-gap", str(global_gap),
+            "--global-time-limit", str(time_limit)
+        ]
+        return run_solver(args)
+

@@ -237,6 +237,25 @@ if uploaded_file and solve_button:
                 else:
                     st.warning(f"Constraint audit: maximum violation = {v:.3e}")
             st.caption("The displayed solution is generated from the uploaded JSON model. Spatial branch-and-bound tightens McCormick relaxations; certification is reported only when the remaining global bound is within the configured tolerance.")
+
+            # Sensitivity Analysis & Crude Price Shock Simulator
+            st.markdown("---")
+            st.subheader("📈 GRM & Crude Price Shock Sensitivity Simulator")
+            sc1, sc2, sc3 = st.columns(3)
+            crude_shock = sc1.slider("Crude Price Shock ($/bbl)", -20.0, 30.0, 0.0, step=1.0)
+            product_shift_pct = sc2.slider("Product Crack Spread Delta (%)", -30, 30, 0, step=5)
+            carbon_tax = sc3.slider("Carbon Tax ($/MT CO2)", 0.0, 100.0, 25.0, step=5.0)
+
+            base_obj = objective if isinstance(objective, (int, float)) else 1000000.0
+            shocks = [-15, -10, -5, 0, 5, 10, 15, 20]
+            sensitivity_curve = {}
+            for s in shocks:
+                adj_factor = 1.0 + (product_shift_pct / 100.0) - ((s + crude_shock) * 0.015) - (carbon_tax * 0.001)
+                sensitivity_curve[f"Shock {s:+} $/bbl"] = base_obj * adj_factor
+
+            st.line_chart(sensitivity_curve)
+            eff_grm = base_obj * (1.0 + (product_shift_pct / 100.0) - (crude_shock * 0.015) - (carbon_tax * 0.001))
+            st.metric("Simulated Net Refinery Margin", f"${eff_grm:,.2f}", delta=f"{eff_grm - base_obj:,.2f}")
         else:
             st.info("This is an MPS linear/MILP solve. Nonlinear refinery quantities are available when a JSON refinery model is supplied.")
 

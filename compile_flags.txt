@@ -1,0 +1,5 @@
+-xc++
+-std=c++20
+-Iinclude
+-Iinclude/nlohmann
+-Wno-unknown-pragmas

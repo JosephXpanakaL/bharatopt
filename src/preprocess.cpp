@@ -165,9 +165,51 @@ PreprocessResult preprocess_lp(const LPModel&input,int passes){
     if(std::isfinite(out.model.lower[j]))out.model.lower[j]/=cs[j];
     if(std::isfinite(out.model.upper[j]))out.model.upper[j]/=cs[j];
   }
+  out.condition_number_estimate = estimate_matrix_condition_number(out.model.A);
   return out;
 }
 void recover_primal(const std::vector<double>&scaled_x,const std::vector<double>&column_scale,std::vector<double>&x){
   x.resize(scaled_x.size());for(std::size_t j=0;j<x.size();j++)x[j]=scaled_x[j]*column_scale[j];
+}
+
+double estimate_matrix_condition_number(const CsrMatrix& A, int max_iter) {
+  if (A.rows == 0 || A.cols == 0 || A.values.empty()) return 1.0;
+  std::vector<double> v(A.cols, 1.0 / std::sqrt(static_cast<double>(A.cols)));
+  std::vector<double> Av(A.rows, 0.0);
+  std::vector<double> AtAv(A.cols, 0.0);
+  double sigma_max = 1.0;
+
+  for (int it = 0; it < max_iter; it++) {
+    std::fill(Av.begin(), Av.end(), 0.0);
+    for (std::size_t i = 0; i < A.rows; i++) {
+      for (int k = A.row_ptr[i]; k < A.row_ptr[i + 1]; k++) {
+        Av[i] += A.values[k] * v[A.col_index[k]];
+      }
+    }
+    std::fill(AtAv.begin(), AtAv.end(), 0.0);
+    for (std::size_t i = 0; i < A.rows; i++) {
+      for (int k = A.row_ptr[i]; k < A.row_ptr[i + 1]; k++) {
+        AtAv[A.col_index[k]] += A.values[k] * Av[i];
+      }
+    }
+    double norm_sq = 0.0;
+    for (double val : AtAv) norm_sq += val * val;
+    double norm = std::sqrt(norm_sq);
+    if (norm < 1e-15 || !std::isfinite(norm)) break;
+    sigma_max = std::sqrt(norm);
+    for (std::size_t j = 0; j < A.cols; j++) v[j] = AtAv[j] / norm;
+  }
+
+  double min_val = 1e30, max_val = 0.0;
+  for (double val : A.values) {
+    double abs_val = std::abs(val);
+    if (abs_val > 1e-12) {
+      min_val = std::min(min_val, abs_val);
+      max_val = std::max(max_val, abs_val);
+    }
+  }
+  if (min_val > 1e20 || max_val <= 0.0) return 1.0;
+  double cond_approx = sigma_max / std::max(min_val, 1e-8);
+  return std::max(1.0, std::min(cond_approx, 1e12));
 }
 }
