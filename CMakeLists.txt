@@ -15,6 +15,7 @@ set(BHARATOPT_CORE_SOURCES
   src/interior_point.cpp
   src/bounded_iis.cpp
   src/pooling.cpp
+  src/refinery_model.cpp
 )
 
 if(NOT BHARATOPT_ENABLE_CUDA)
