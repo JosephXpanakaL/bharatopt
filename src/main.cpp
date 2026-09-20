@@ -4,6 +4,7 @@
 #include "bharatopt/interior_point.hpp"
 #include "bharatopt/qp.hpp"
 #include "bharatopt/solver.hpp"
+#include "bharatopt/bounded_iis.hpp"
 #include "bharatopt/cuda_backend.hpp"
 #include <algorithm>
 #include <cmath>
