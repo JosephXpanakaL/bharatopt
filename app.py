@@ -81,7 +81,7 @@ def run_pooling_engine(timeout_seconds=30.0):
             return {"status": "CRASH", "error": f"Pooling engine returned invalid JSON: {exc}"}
 
 
-def solve_with_bharatopt_cli(uploaded_file, timeout_seconds=15.0):
+def solve_with_bharatopt_cli(uploaded_file, timeout_seconds=75.0):
     exe, build_error = ensure_bharatopt_engine()
     if exe is None:
         return {"status": "CRASH", "error": build_error or "Native BharatOpt engine unavailable."}
@@ -166,8 +166,8 @@ if uploaded_file and solve_button:
     with st.spinner("Preparing native BharatOpt engine and executing model..."):
         result = solve_with_bharatopt_cli(uploaded_file)
 
-    if result.get("status", "").lower() in ["optimal", "feasible"]:
-        st.success("Feasible production plan found.")
+    if result.get("status", "").lower() in ["optimal", "feasible", "globally_certified_within_tolerance", "global_optimal_within_tolerance"]:
+        if result.get("global_optimality_certified"):\n            st.success("Global optimum certified within the configured tolerance.")\n        else:\n            st.success("Feasible production plan found; global certification not reached within the search limits.")
 
         c1, c2, c3 = st.columns(3)
         objective = result.get("objective")
@@ -186,9 +186,9 @@ if uploaded_file and solve_button:
                     st.success(f"Constraint audit passed: maximum violation = {v:.3e}")
                 else:
                     st.warning(f"Constraint audit: maximum violation = {v:.3e}")
-            st.caption("The displayed solution is generated from the uploaded JSON model. SLP provides a feasible nonlinear solution when the constraint audit passes; the McCormick relaxation supplies a global upper bound for maximization.")
+            st.caption("The displayed solution is generated from the uploaded JSON model. Spatial branch-and-bound tightens McCormick relaxations; certification is reported only when the remaining global bound is within the configured tolerance.")
         else:
-            st.info("This is an MPS linear/MILP solve. Pooling-specific nonlinear quantities are not inferred from an MPS file.")
+            st.info("This is an MPS linear/MILP solve. Nonlinear refinery quantities are available when a JSON refinery model is supplied.")
 
     elif result.get("status", "").lower() == "infeasible":
         st.error("No feasible production plan was found for the supplied model.")
