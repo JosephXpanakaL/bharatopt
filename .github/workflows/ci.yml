@@ -14,18 +14,18 @@ jobs:
       - name: Test
         run: ctest --test-dir build --output-on-failure
       - name: Smoke test LP
-        run: ./build/bharatopt_cli --demo
+        run: ./build/bharatopt --demo
       - name: Smoke test MILP
-        run: ./build/bharatopt_cli --mip-demo --max-nodes 64
+        run: ./build/bharatopt --mip-demo --max-nodes 64
       - name: Smoke test QP
-        run: ./build/bharatopt_cli --qp-demo
+        run: ./build/bharatopt --qp-demo
       - name: Smoke test maximization MPS
-        run: ./build/bharatopt_cli --mps examples/max_demo.mps
+        run: ./build/bharatopt --mps examples/max_demo.mps
       - name: Check JSON output
-        run: ./build/bharatopt_cli --demo --json | python3 -c 'import json,sys; json.load(sys.stdin); print("valid JSON")'
+        run: ./build/bharatopt --demo --json | python3 -c 'import json,sys; json.load(sys.stdin); print("valid JSON")'
       - name: Validate nonlinear refinery model
         run: |
-          ./build/bharatopt_cli --refinery-json examples/refinery_pooling.json --output build/refinery-result.json --mode certified
+          ./build/bharatopt --refinery-json examples/refinery_pooling.json --output build/refinery-result.json --mode certified
           python3 - <<'PY'
           import json
           from pathlib import Path
