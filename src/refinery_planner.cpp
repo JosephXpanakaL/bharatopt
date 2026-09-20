@@ -65,13 +65,15 @@ RefineryModel parse_model(const json& j) {
         m.units.push_back(std::move(un));
     }
 
-    for (const auto& s : j.at("streams")) {
-        Stream st;
-        st.name = s.at("name").get<std::string>();
-        st.source = s.value("source", std::string(""));
-        if (s.contains("properties"))
-            for (auto& [k, v] : s.at("properties").items()) st.properties[k] = v.get<double>();
-        m.streams.push_back(std::move(st));
+    if (j.contains("streams")) {
+        for (const auto& s : j.at("streams")) {
+            Stream st;
+            st.name = s.at("name").get<std::string>();
+            st.source = s.value("source", std::string(""));
+            if (s.contains("properties"))
+                for (auto& [k, v] : s.at("properties").items()) st.properties[k] = v.get<double>();
+            m.streams.push_back(std::move(st));
+        }
     }
 
     for (const auto& p : j.at("pools")) {
@@ -81,6 +83,14 @@ RefineryModel parse_model(const json& j) {
         pl.bilinear = p.value("bilinear", true);
         if (p.contains("inlet_streams"))
             for (const auto& s : p.at("inlet_streams")) pl.inlet_streams.push_back(s.get<std::string>());
+        else if (p.contains("inlets"))
+            for (const auto& s : p.at("inlets")) pl.inlet_streams.push_back(s.get<std::string>());
+        if (p.contains("tracked_properties"))
+            for (const auto& s : p.at("tracked_properties")) pl.tracked_properties.push_back(s.get<std::string>());
+        pl.inlets = pl.inlet_streams;
+        if (pl.blended_property.empty() && !pl.tracked_properties.empty()) {
+            pl.blended_property = pl.tracked_properties.front();
+        }
         m.pools.push_back(std::move(pl));
     }
 
@@ -89,11 +99,27 @@ RefineryModel parse_model(const json& j) {
         ps.name = pr.at("name").get<std::string>();
         ps.from_pool = pr.value("from_pool", std::string(""));
         ps.from_stream = pr.value("from_stream", std::string(""));
-        ps.minimum_production = pr.value("minimum_production", 0.0);
-        ps.maximum_production = pr.value("maximum_production", 0.0);
+        ps.pool = pr.value("pool", ps.from_pool);
+        ps.minimum_production = pr.value("minimum_production", pr.value("demand_min", 0.0));
+        ps.maximum_production = pr.value("maximum_production", pr.value("demand_max", 0.0));
+        ps.demand_min = ps.minimum_production;
+        ps.demand_max = ps.maximum_production;
         ps.price_per_bbl = pr.value("price_per_bbl", 0.0);
-        if (pr.contains("specifications"))
-            for (auto& [k, v] : pr.at("specifications").items()) ps.specifications[k] = v.get<double>();
+        if (pr.contains("specifications")) {
+            for (auto& [k, v] : pr.at("specifications").items()) {
+                PropertyLimit limit;
+                if (v.is_object()) {
+                    if (v.contains("min")) limit.min = v.at("min").get<double>();
+                    if (v.contains("max")) limit.max = v.at("max").get<double>();
+                } else {
+                    const double value = v.get<double>();
+                    limit.min = value;
+                    limit.max = value;
+                }
+                ps.specifications[k] = limit;
+            }
+        }
+        if (ps.from_pool.empty() && !ps.pool.empty()) ps.from_pool = ps.pool;
         m.products.push_back(std::move(ps));
     }
 
@@ -111,7 +137,7 @@ RefineryPlanner::RefineryPlanner(const std::string& json_path) {
     } catch (const json::parse_error& e) {
         throw std::runtime_error(std::string("refinery_planner: malformed JSON: ") + e.what());
     }
-    for (const char* required : {"feedstocks", "units", "streams", "pools", "products"}) {
+    for (const auto* required : {"feedstocks", "units", "pools", "products"}) {
         if (!j.contains(required))
             throw std::runtime_error(std::string("refinery_planner: missing required key '") + required + "'");
     }
@@ -159,6 +185,13 @@ void RefineryPlanner::check_unknown_references(ValidationResult& r) const {
     for (auto& f : model_.feedstocks) feed_names.insert(f.name);
     for (auto& s : model_.streams) stream_names.insert(s.name);
     for (auto& p : model_.pools) pool_names.insert(p.name);
+    for (auto& u : model_.units) {
+        for (auto& [feed, outs] : u.yields) {
+            for (auto& [out_name, frac] : outs) {
+                stream_names.insert(out_name);
+            }
+        }
+    }
 
     for (auto& u : model_.units) {
         for (auto& feed : u.feed_streams) {
@@ -375,7 +408,9 @@ bharatopt::PoolingModel RefineryPlanner::build() const {
     for (const auto& p : model_.pools) {
         std::string pool_vol_name = "pool::" + p.name + "::vol";
         add_var(pool_vol_name, 0.0, 1e9, 0.0);
-        for (const auto& prop : p.tracked_properties) {
+        const auto tracked = p.tracked_properties.empty() ? std::vector<std::string>{p.blended_property} : p.tracked_properties;
+        for (const auto& prop : tracked) {
+            if (prop.empty()) continue;
             std::string pool_prop_name = "pool::" + p.name + "::" + prop;
             add_var(pool_prop_name, 0.0, 1000.0, 0.0);
         }
@@ -384,7 +419,13 @@ bharatopt::PoolingModel RefineryPlanner::build() const {
     // 4. Product variables (revenue is positive for maximization)
     for (const auto& pr : model_.products) {
         std::string pr_name = "product::" + pr.name;
-        add_var(pr_name, pr.demand_min, pr.demand_max, pr.price_per_bbl);
+        const double lower = pr.demand_min > 0.0 ? pr.demand_min : pr.minimum_production;
+        const double upper = pr.demand_max > 0.0 ? pr.demand_max : pr.maximum_production;
+        if (!std::isfinite(upper) || upper <= 0.0) {
+            add_var(pr_name, lower, 1e9, pr.price_per_bbl);
+        } else {
+            add_var(pr_name, lower, upper, pr.price_per_bbl);
+        }
     }
 
     struct Coeff { int col; double val; };
@@ -461,7 +502,8 @@ bharatopt::PoolingModel RefineryPlanner::build() const {
         row.upper = 0.0;
         std::string pool_vol_name = "pool::" + p.name + "::vol";
         row.entries.push_back({var_idx[pool_vol_name], -1.0});
-        for (const auto& inlet : p.inlets) {
+        const auto inlets = p.inlet_streams.empty() ? p.inlets : p.inlet_streams;
+        for (const auto& inlet : inlets) {
             if (var_idx.count(inlet)) {
                 row.entries.push_back({var_idx[inlet], 1.0});
             }
@@ -478,7 +520,8 @@ bharatopt::PoolingModel RefineryPlanner::build() const {
         std::string pool_vol_name = "pool::" + p.name + "::vol";
         row.entries.push_back({var_idx[pool_vol_name], -1.0});
         for (const auto& pr : model_.products) {
-            if (pr.pool == p.name) {
+            const std::string pool_name = pr.from_pool.empty() ? pr.pool : pr.from_pool;
+            if (pool_name == p.name) {
                 std::string pr_name = "product::" + pr.name;
                 row.entries.push_back({var_idx[pr_name], 1.0});
             }
@@ -490,8 +533,9 @@ bharatopt::PoolingModel RefineryPlanner::build() const {
 
     // Constraint: Product specifications against pool properties
     for (const auto& pr : model_.products) {
+        const std::string pool_name = pr.from_pool.empty() ? pr.pool : pr.from_pool;
         for (const auto& [prop, spec] : pr.specifications) {
-            std::string pool_prop_name = "pool::" + pr.pool + "::" + prop;
+            std::string pool_prop_name = "pool::" + pool_name + "::" + prop;
             if (var_idx.count(pool_prop_name)) {
                 if (spec.max.has_value()) {
                     RowSpec row;
@@ -534,7 +578,9 @@ bharatopt::PoolingModel RefineryPlanner::build() const {
     for (std::size_t i = 0; i < rows.size(); ++i) {
         for (const auto& p : model_.pools) {
             if (rows[i].name == "pool_bal::" + p.name) {
-                for (const auto& prop : p.tracked_properties) {
+                const auto tracked = p.tracked_properties.empty() ? std::vector<std::string>{p.blended_property} : p.tracked_properties;
+                for (const auto& prop : tracked) {
+                    if (prop.empty()) continue;
                     std::string vol_var = "pool::" + p.name + "::vol";
                     std::string prop_var = "pool::" + p.name + "::" + prop;
                     if (var_idx.count(vol_var) && var_idx.count(prop_var)) {

@@ -6,11 +6,17 @@
 // domain. refinery_planner.{hpp,cpp} is what translates these into the
 // generic PoolingModel your solver already consumes.
 
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
 namespace bharatopt::refinery {
+
+struct PropertyLimit {
+    std::optional<double> min;
+    std::optional<double> max;
+};
 
 struct Feedstock {
     std::string name;
@@ -46,7 +52,9 @@ struct Stream {
 struct Pool {
     std::string name;
     std::vector<std::string> inlet_streams;
+    std::vector<std::string> inlets; // compatibility alias for older JSON contracts
     std::string blended_property;   // property name this pool blends on, e.g. "sulfur_wt_pct"
+    std::vector<std::string> tracked_properties; // compatibility alias
     bool bilinear = true;
 };
 
@@ -54,11 +62,14 @@ struct ProductSpec {
     std::string name;
     std::string from_pool;          // set iff the product is drawn from a pool
     std::string from_stream;        // set iff the product is drawn directly from a stream
+    std::string pool;               // compatibility alias for older JSON contracts
     double minimum_production = 0.0;
     double maximum_production = 0.0;
+    double demand_min = 0.0;        // compatibility alias
+    double demand_max = 0.0;        // compatibility alias
     double price_per_bbl = 0.0;
-    // specifications["sulfur_max"] = 0.0010, specifications["RON_min"] = 91, etc.
-    std::unordered_map<std::string, double> specifications;
+    // specification limits for a property, e.g. {"sulfur": {"max": 10.0}}
+    std::unordered_map<std::string, PropertyLimit> specifications;
 };
 
 struct PlanningPeriod {
