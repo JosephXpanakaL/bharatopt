@@ -43,6 +43,10 @@ struct PoolingSLPOptions {
 
   double improvement_tolerance{1e-10};
 
+  // Deterministic feasibility-restoration search before SLP iterations.
+  int feasibility_search_attempts{256};
+  double feasibility_search_step_fraction{0.25};
+
   SolverOptions lp_options{};
 };
 
@@ -87,6 +91,8 @@ struct McCormickRelaxation {
 
   double global_lower_bound{INF};
   bool has_global_lower_bound{false};
+  double global_upper_bound{-INF};
+  bool has_global_upper_bound{false};
 
   SolverResult solve_result;
 };
