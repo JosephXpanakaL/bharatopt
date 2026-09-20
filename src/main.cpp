@@ -76,6 +76,9 @@ static void write_refinery_json(
     else jnum(out, bharatopt::pooling_max_constraint_violation(refinery.pooling, global.x));
     out << ",\"nodes_explored\":" << global.nodes_explored;
     out << ",\"nodes_pruned\":" << global.nodes_pruned;
+    out << ",\"slp_iterations\":" << global.incumbent.iterations;
+    out << ",\"slp_accepted_steps\":" << global.incumbent.accepted_steps;
+    out << ",\"slp_rejected_steps\":" << global.incumbent.rejected_steps;
     out << ",\"variables\":[";
     for (std::size_t i = 0; i < refinery.pooling.linear.var_names.size(); ++i) {
         if (i) out << ",";
