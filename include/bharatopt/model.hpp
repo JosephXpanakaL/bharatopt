@@ -46,6 +46,7 @@ struct SolverResult {
   double objective{0.0},best_bound{INF},dual_bound{-INF},mip_gap{INF};
   double primal_residual{INF},dual_residual{INF},max_constraint_violation{0.0},solve_time_sec{0.0};
   std::vector<double> x;
+  std::vector<double> farkas_multipliers;
   std::string status,backend;
 };
 }

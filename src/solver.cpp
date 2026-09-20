@@ -172,6 +172,9 @@ SolverResult BharatOptSolverCore::solve_lp(const LPModel&input,const SolverOptio
     r.best_bound=r.objective;
   }
   if(r.status.empty())r.status=r.converged?"OPTIMALITY_TOL_REACHED":"ITERATION_LIMIT";
+  if(!r.converged && std::isfinite(r.primal_residual) && r.primal_residual > 0.1) {
+    r.farkas_multipliers = y;
+  }
   r.solve_time_sec=std::chrono::duration<double>(std::chrono::steady_clock::now()-t0).count();
   return r;
 }
