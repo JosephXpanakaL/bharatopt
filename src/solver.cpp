@@ -110,8 +110,11 @@ SolverResult BharatOptSolverCore::solve_lp(const LPModel&input,const SolverOptio
   }
 #endif
   const int n=(int)m.A.cols,rc=(int)m.A.rows;
-  SolverResult r;r.x.assign(n,0.0);proj(r.x,m.lower,m.upper);
+  SolverResult r;
+  if(o.warm_start_x.size()==(size_t)n) { r.x = o.warm_start_x; proj(r.x, m.lower, m.upper); }
+  else { r.x.assign(n,0.0); proj(r.x,m.lower,m.upper); }
   std::vector<double>xbar=r.x,xprev=r.x,y(rc,0.0),a,aty;
+  if(o.warm_start_y.size()==(size_t)rc) y = o.warm_start_y;
   double L=opnorm(m.A);if(!std::isfinite(L))L=1.0;if(L<1e-12)L=1.0;
   double tau=o.tau,sigma=o.sigma;if(tau<=0||sigma<=0)throw std::runtime_error("tau and sigma must be positive");
   if(tau*sigma*L*L>=0.95){double s=std::sqrt(0.9/(tau*sigma*L*L));tau*=s;sigma*=s;}

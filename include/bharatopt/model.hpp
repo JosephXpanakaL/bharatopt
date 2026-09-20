@@ -38,6 +38,8 @@ struct SolverOptions {
   int scaling_passes{5};
   bool presolve{true};
   double time_limit_sec{0.0};
+  std::vector<double> warm_start_x;
+  std::vector<double> warm_start_y;
 };
 struct SolverResult {
   bool converged{false};
