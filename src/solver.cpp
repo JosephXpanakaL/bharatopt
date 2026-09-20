@@ -24,14 +24,20 @@ double model_objective(const LPModel&m,const std::vector<double>&x){
 void certify_original(const LPModel&orig,SolverResult&r){
   if(r.x.size()!=orig.A.cols)return;
   std::vector<double>ax;Ax(orig.A,r.x,ax);
-  double viol=0;
+  double viol=0, max_viol=0;
+  for(std::size_t j=0;j<orig.A.cols;j++){
+    if(orig.lower[j]-r.x[j]>max_viol) max_viol=orig.lower[j]-r.x[j];
+    if(r.x[j]-orig.upper[j]>max_viol) max_viol=r.x[j]-orig.upper[j];
+  }
   for(std::size_t i=0;i<orig.A.rows;i++){
     double w=0;
     if(ax[i]<orig.row_lower[i])w=orig.row_lower[i]-ax[i];
     else if(ax[i]>orig.row_upper[i])w=ax[i]-orig.row_upper[i];
     viol+=w*w;
+    if(w>max_viol) max_viol=w;
   }
   r.primal_residual=std::sqrt(viol)/(1.0+n2(ax));
+  r.max_constraint_violation=max_viol;
   r.objective=model_objective(orig,r.x);
 }
 double dual_lower_bound(const LPModel&m,const std::vector<double>&y){

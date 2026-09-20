@@ -44,7 +44,7 @@ struct SolverResult {
   int iterations{0};
   std::size_t nodes{0};
   double objective{0.0},best_bound{INF},dual_bound{-INF},mip_gap{INF};
-  double primal_residual{INF},dual_residual{INF},solve_time_sec{0.0};
+  double primal_residual{INF},dual_residual{INF},max_constraint_violation{0.0},solve_time_sec{0.0};
   std::vector<double> x;
   std::string status,backend;
 };
