@@ -58,6 +58,20 @@ struct ProductSpec {
     std::unordered_map<std::string, double> specifications;
 };
 
+struct PlanningPeriod {
+    int period_id{0};
+    std::string name;
+    double duration_days{30.0};
+    double discount_factor{1.0};
+};
+
+struct BlendCompatibilityPenalty {
+    std::string stream_a;
+    std::string stream_b;
+    double max_fraction_together{1.0};
+    double penalty_cost_per_bbl{0.0};
+};
+
 struct RefineryModel {
     std::string name;
     bool synthetic = false;
@@ -66,6 +80,8 @@ struct RefineryModel {
     std::vector<Stream> streams;
     std::vector<Pool> pools;
     std::vector<ProductSpec> products;
+    std::vector<PlanningPeriod> periods;
+    std::vector<BlendCompatibilityPenalty> compatibility_rules;
 };
 
 }  // namespace bharatopt::refinery
