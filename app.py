@@ -138,40 +138,29 @@ st.caption("TEAM NOVAKIN • SIH26119 • Indigenous Refinery Optimization Engin
 
 with st.sidebar:
     st.header("Refinery Configuration")
-    uploaded_file = st.file_uploader("Upload Model (.mps)", type=["mps"])
+    uploaded_file = st.file_uploader("Upload Refinery Model", type=["mps", "json"])
     solve_button = st.button("Run Optimizer", type="primary", use_container_width=True)
     pooling_button = st.button("Run Native Pooling Analysis", use_container_width=True)
 
     st.divider()
     st.subheader("Engine Status")
-    st.success("CPU: Simplex Core (Active)")
-    st.success("GPU: CUDA Batched Heuristics (Ready)")
-    st.success("Safety: Directed-Rounding (Enforced)")
+    st.success("Native C++ engine: Active")
+    st.caption("JSON uploads use the configurable nonlinear refinery model. MPS uploads use the linear/MILP path.")
 
 if pooling_button:
-    with st.spinner("Running native SLP + McCormick pooling analysis..."):
+    with st.spinner("Running native SLP + McCormick benchmark..."):
         pooling_result = run_pooling_engine()
 
     if isinstance(pooling_result.get("slp_objective"), (int, float)) and isinstance(pooling_result.get("mccormick_bound"), (int, float)):
-        st.subheader("Native Refinery Pooling Analysis")
-        st.caption("These values are computed live by BharatOpt C++ SLP and McCormick engines on the built-in MRPL pooling benchmark. No UI fallback or hard-coded result is used.")
+        st.subheader("Native Pooling Engine Check")
+        st.caption("This button runs the repository's built-in regression benchmark. It is an engine test, not a refinery production result.")
         p1, p2, p3 = st.columns(3)
-        slp_objective = pooling_result.get("slp_objective")
-        mc_bound = pooling_result.get("mccormick_bound")
-        nonlinear_gap = pooling_result.get("nonlinear_gap")
-        p1.metric("SLP Objective", f"₹ {slp_objective:,.2f}" if isinstance(slp_objective, (int, float)) else "Not reported")
-        p2.metric("McCormick Global Bound", f"₹ {mc_bound:,.2f}" if isinstance(mc_bound, (int, float)) else "Not reported")
-        p3.metric("Non-Linear Gap", f"{nonlinear_gap * 100:.4f}%" if isinstance(nonlinear_gap, (int, float)) else "Not reported")
-        d1, d2, d3, d4 = st.columns(4)
-        d1.metric("SLP Iterations", pooling_result.get("slp_iterations", "—"))
-        d2.metric("Accepted Steps", pooling_result.get("accepted_steps", "—"))
-        d3.metric("Rejected Steps", pooling_result.get("rejected_steps", "—"))
-        ratio = pooling_result.get("improvement_ratio")
-        d4.metric("Improvement Ratio", f"{ratio:.4f}" if isinstance(ratio, (int, float)) else "Not reported")
+        p1.metric("SLP Objective", f"{pooling_result['slp_objective']:,.2f}")
+        p2.metric("McCormick Bound", f"{pooling_result['mccormick_bound']:,.2f}")
+        p3.metric("Nonlinear Gap", f"{pooling_result.get('nonlinear_gap', 0) * 100:.4f}%")
         st.success(f"SLP: {pooling_result.get('status')} • McCormick: {pooling_result.get('mccormick_status')}")
-        st.caption("For this maximization model, the McCormick relaxation is a global upper bound. The nonlinear gap is computed as (bound − SLP objective) / (1 + |SLP objective|).")
     else:
-        st.error(f"Pooling analysis failed: {pooling_result.get('error', pooling_result.get('status'))}")
+        st.error(f"Pooling engine check failed: {pooling_result.get('error', pooling_result.get('status'))}")
 
 if uploaded_file and solve_button:
     with st.spinner("Preparing native BharatOpt engine and executing model..."):
