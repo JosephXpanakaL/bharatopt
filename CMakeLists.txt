@@ -30,6 +30,7 @@ set(BHARATOPT_CORE_SOURCES
   src/pooling.cpp
   src/refinery_model.cpp
   src/refinery_planner.cpp
+  src/simplex.cpp
 )
 
 if(NOT BHARATOPT_ENABLE_CUDA)
