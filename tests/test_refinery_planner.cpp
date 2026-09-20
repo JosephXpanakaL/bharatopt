@@ -74,7 +74,12 @@ int main() {
         assert(planner.model().products.size() == 1);
         assert(!json_report.empty());
 
-        std::cout << "RefineryPlanner validation tests passed successfully!\n";
+        auto pm = planner.build();
+        assert(pm.linear.A.cols > 0);
+        assert(pm.linear.A.rows > 0);
+        assert(!pm.linear.var_names.empty());
+
+        std::cout << "RefineryPlanner validation and build tests passed successfully!\n";
     } catch (const std::exception& e) {
         std::cerr << "Test failed: " << e.what() << "\n";
         return 1;

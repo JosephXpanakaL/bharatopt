@@ -335,49 +335,219 @@ std::string ValidationResult::to_json() const {
 }
 
 // ------------------------------------------------------------------ build
-//
-// Sketch only — uncomment and adjust once pooling_model.hpp's real method
-// names are known. The translation itself (one variable per feed/unit-feed/
-// stream/pool-inlet/product, one equality row per mass balance, one bilinear
-// term per pool) does not depend on solver internals, only on method names.
-//
-// PoolingModel RefineryPlanner::build() const {
-//     PoolingModel pm;
-//     std::unordered_map<std::string, int> var;
-//
-//     for (auto& f : model_.feedstocks)
-//         var[f.name] = pm.add_variable(f.name, 0.0, f.availability);
-//
-//     for (auto& u : model_.units) {
-//         for (auto& [feed, outs] : u.yields) {
-//             std::string feed_var_name = u.name + "::" + feed;
-//             var[feed_var_name] = pm.add_variable(feed_var_name, 0.0, u.capacity_max);
-//             for (auto& [out_name, frac] : outs) {
-//                 std::string out_var_name = out_name;  // one var per stream, summed over sources
-//                 if (!var.count(out_var_name))
-//                     var[out_var_name] = pm.add_variable(out_var_name, 0.0, 1e12);
-//                 // out_volume - frac * feed_volume == 0  (per contributing unit; summed if
-//                 // multiple units feed the same stream — extend coeffs accordingly)
-//                 pm.add_linear_constraint(u.name + "->" + out_name,
-//                     {{var[out_var_name], 1.0}, {var[feed_var_name], -frac}}, '=', 0.0);
-//             }
-//         }
-//         // capacity: sum of this unit's feed vars within [capacity_min, capacity_max]
-//     }
-//
-//     for (auto& p : model_.pools) {
-//         // one quality variable + one volume variable per inlet, bilinear term per inlet,
-//         // pool balance: sum(inlet volumes) == pool volume,
-//         // quality balance: sum(quality_i * volume_i) == blended_property * pool_volume
-//         // (this is exactly the bilinear term add_bilinear_term exists for)
-//     }
-//
-//     for (auto& pr : model_.products) {
-//         // demand bounds via add_variable bounds; specifications via
-//         // add_linear_constraint against the relevant pool's blended property variable
-//     }
-//
-//     return pm;
-// }
+bharatopt::PoolingModel RefineryPlanner::build() const {
+    bharatopt::PoolingModel pm;
+    pm.name = model_.name;
+    pm.linear.name = model_.name;
+    pm.linear.maximize = true;
+
+    std::unordered_map<std::string, int> var_idx;
+    auto add_var = [&](const std::string& name, double lb, double ub, double obj_coeff = 0.0) -> int {
+        int idx = static_cast<int>(pm.linear.var_names.size());
+        pm.linear.var_names.push_back(name);
+        pm.linear.lower.push_back(lb);
+        pm.linear.upper.push_back(ub);
+        pm.linear.objective.push_back(obj_coeff);
+        pm.linear.integer.push_back(0);
+        var_idx[name] = idx;
+        return idx;
+    };
+
+    // 1. Feedstock variables (cost is negative for maximization)
+    for (const auto& f : model_.feedstocks) {
+        add_var(f.name, 0.0, f.availability, -f.cost_per_bbl);
+    }
+
+    // 2. Unit feeds & intermediate stream variables
+    for (const auto& u : model_.units) {
+        for (const auto& [feed, outs] : u.yields) {
+            std::string feed_var = u.name + "::" + feed;
+            add_var(feed_var, 0.0, u.capacity_max, -u.energy_cost_per_bbl);
+            for (const auto& [out_name, _] : outs) {
+                if (!var_idx.count(out_name)) {
+                    add_var(out_name, 0.0, 1e9, 0.0);
+                }
+            }
+        }
+    }
+
+    // 3. Pool variables (volumes and tracked properties)
+    for (const auto& p : model_.pools) {
+        std::string pool_vol_name = "pool::" + p.name + "::vol";
+        add_var(pool_vol_name, 0.0, 1e9, 0.0);
+        for (const auto& prop : p.tracked_properties) {
+            std::string pool_prop_name = "pool::" + p.name + "::" + prop;
+            add_var(pool_prop_name, 0.0, 1000.0, 0.0);
+        }
+    }
+
+    // 4. Product variables (revenue is positive for maximization)
+    for (const auto& pr : model_.products) {
+        std::string pr_name = "product::" + pr.name;
+        add_var(pr_name, pr.demand_min, pr.demand_max, pr.price_per_bbl);
+    }
+
+    struct Coeff { int col; double val; };
+    struct RowSpec {
+        std::string name;
+        double lower;
+        double upper;
+        std::vector<Coeff> entries;
+    };
+    std::vector<RowSpec> rows;
+
+    // Constraint: Feedstock allocation to units (sum of draws <= availability)
+    for (const auto& f : model_.feedstocks) {
+        RowSpec row;
+        row.name = "alloc::" + f.name;
+        row.lower = -1e9;
+        row.upper = 0.0;
+        row.entries.push_back({var_idx[f.name], -1.0});
+        for (const auto& u : model_.units) {
+            std::string feed_var = u.name + "::" + f.name;
+            if (var_idx.count(feed_var)) {
+                row.entries.push_back({var_idx[feed_var], 1.0});
+            }
+        }
+        if (row.entries.size() > 1) {
+            rows.push_back(row);
+        }
+    }
+
+    // Constraint: Unit capacity limits
+    for (const auto& u : model_.units) {
+        RowSpec row;
+        row.name = "cap::" + u.name;
+        row.lower = u.capacity_min;
+        row.upper = u.capacity_max;
+        for (const auto& [feed, _] : u.yields) {
+            std::string feed_var = u.name + "::" + feed;
+            if (var_idx.count(feed_var)) {
+                row.entries.push_back({var_idx[feed_var], 1.0});
+            }
+        }
+        if (!row.entries.empty()) {
+            rows.push_back(row);
+        }
+    }
+
+    // Constraint: Stream yields from units (out_stream - sum(yield * unit_feed) == 0)
+    std::unordered_map<std::string, std::vector<std::pair<std::string, double>>> stream_sources;
+    for (const auto& u : model_.units) {
+        for (const auto& [feed, outs] : u.yields) {
+            std::string feed_var = u.name + "::" + feed;
+            for (const auto& [out_name, frac] : outs) {
+                stream_sources[out_name].push_back({feed_var, frac});
+            }
+        }
+    }
+    for (const auto& [stream_name, sources] : stream_sources) {
+        RowSpec row;
+        row.name = "yield::" + stream_name;
+        row.lower = 0.0;
+        row.upper = 0.0;
+        row.entries.push_back({var_idx[stream_name], 1.0});
+        for (const auto& [feed_var, frac] : sources) {
+            row.entries.push_back({var_idx[feed_var], -frac});
+        }
+        rows.push_back(row);
+    }
+
+    // Constraint: Pool volume balance (sum(inlets) - pool_volume == 0)
+    for (const auto& p : model_.pools) {
+        RowSpec row;
+        row.name = "pool_bal::" + p.name;
+        row.lower = 0.0;
+        row.upper = 0.0;
+        std::string pool_vol_name = "pool::" + p.name + "::vol";
+        row.entries.push_back({var_idx[pool_vol_name], -1.0});
+        for (const auto& inlet : p.inlets) {
+            if (var_idx.count(inlet)) {
+                row.entries.push_back({var_idx[inlet], 1.0});
+            }
+        }
+        rows.push_back(row);
+    }
+
+    // Constraint: Product draw balance (sum(products from pool) - pool_volume <= 0)
+    for (const auto& p : model_.pools) {
+        RowSpec row;
+        row.name = "pool_draw::" + p.name;
+        row.lower = -1e9;
+        row.upper = 0.0;
+        std::string pool_vol_name = "pool::" + p.name + "::vol";
+        row.entries.push_back({var_idx[pool_vol_name], -1.0});
+        for (const auto& pr : model_.products) {
+            if (pr.pool == p.name) {
+                std::string pr_name = "product::" + pr.name;
+                row.entries.push_back({var_idx[pr_name], 1.0});
+            }
+        }
+        if (row.entries.size() > 1) {
+            rows.push_back(row);
+        }
+    }
+
+    // Constraint: Product specifications against pool properties
+    for (const auto& pr : model_.products) {
+        for (const auto& [prop, spec] : pr.specifications) {
+            std::string pool_prop_name = "pool::" + pr.pool + "::" + prop;
+            if (var_idx.count(pool_prop_name)) {
+                if (spec.max.has_value()) {
+                    RowSpec row;
+                    row.name = "spec_max::" + pr.name + "::" + prop;
+                    row.lower = -1e9;
+                    row.upper = *spec.max;
+                    row.entries.push_back({var_idx[pool_prop_name], 1.0});
+                    rows.push_back(row);
+                }
+                if (spec.min.has_value()) {
+                    RowSpec row;
+                    row.name = "spec_min::" + pr.name + "::" + prop;
+                    row.lower = *spec.min;
+                    row.upper = 1e9;
+                    row.entries.push_back({var_idx[pool_prop_name], 1.0});
+                    rows.push_back(row);
+                }
+            }
+        }
+    }
+
+    // Assemble CSR matrix A
+    pm.linear.A.rows = rows.size();
+    pm.linear.A.cols = pm.linear.var_names.size();
+    pm.linear.A.row_ptr.assign(rows.size() + 1, 0);
+
+    for (std::size_t i = 0; i < rows.size(); ++i) {
+        pm.linear.rows.push_back({rows[i].name, RowSense::Equal, rows[i].upper});
+        pm.linear.row_lower.push_back(rows[i].lower);
+        pm.linear.row_upper.push_back(rows[i].upper);
+        for (const auto& c : rows[i].entries) {
+            pm.linear.A.col_index.push_back(c.col);
+            pm.linear.A.values.push_back(c.val);
+        }
+        pm.linear.A.row_ptr[i + 1] = static_cast<int>(pm.linear.A.values.size());
+    }
+
+    // Bilinear pooling terms
+    pm.constraint_bilinear.resize(rows.size());
+    for (std::size_t i = 0; i < rows.size(); ++i) {
+        for (const auto& p : model_.pools) {
+            if (rows[i].name == "pool_bal::" + p.name) {
+                for (const auto& prop : p.tracked_properties) {
+                    std::string vol_var = "pool::" + p.name + "::vol";
+                    std::string prop_var = "pool::" + p.name + "::" + prop;
+                    if (var_idx.count(vol_var) && var_idx.count(prop_var)) {
+                        pm.constraint_bilinear[i].push_back(
+                            BilinearTerm{var_idx[vol_var], var_idx[prop_var], -1.0}
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    return pm;
+}
 
 }  // namespace bharatopt::refinery
