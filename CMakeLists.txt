@@ -29,6 +29,7 @@ set(BHARATOPT_CORE_SOURCES
   src/bounded_iis.cpp
   src/pooling.cpp
   src/refinery_model.cpp
+  src/refinery_planner.cpp
 )
 
 if(NOT BHARATOPT_ENABLE_CUDA)
@@ -72,6 +73,10 @@ add_test(NAME bharatopt_bounded_iis_tests COMMAND bharatopt_bounded_iis_tests)
 add_executable(bharatopt_refinery_model_tests tests/test_refinery_model.cpp)
 target_link_libraries(bharatopt_refinery_model_tests PRIVATE bharatopt)
 add_test(NAME bharatopt_refinery_model_tests COMMAND bharatopt_refinery_model_tests)
+
+add_executable(bharatopt_refinery_planner_tests tests/test_refinery_planner.cpp)
+target_link_libraries(bharatopt_refinery_planner_tests PRIVATE bharatopt)
+add_test(NAME bharatopt_refinery_planner_tests COMMAND bharatopt_refinery_planner_tests)
 
 include(GNUInstallDirs)
 install(TARGETS bharatopt bharatopt_cli
