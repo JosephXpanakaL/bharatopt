@@ -250,7 +250,6 @@ RefineryModel parse_refinery_json(const std::string& path) {
         out.pooling.linear.row_upper.back()=rhs;
       }
       out.pooling.constraint_bilinear.emplace_back();
-      parse_coefficients(c.find("linear"),idx, *new std::vector<double>(), "unused");
     }
   }
 
@@ -265,7 +264,6 @@ RefineryModel parse_refinery_json(const std::string& path) {
       std::vector<double> coeff(n,0.0);
       parse_coefficients(c.find("linear"),idx,coeff,"constraint.linear");
       for (std::size_t j=0;j<n;++j) if (std::abs(coeff[j])>0.0) {
-        out.pooling.linear.col_index; // keep compiler diagnostics local
         out.pooling.linear.A.col_index.push_back(static_cast<int>(j));
         out.pooling.linear.A.values.push_back(coeff[j]);
       }
