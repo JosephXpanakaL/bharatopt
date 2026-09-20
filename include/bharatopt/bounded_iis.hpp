@@ -35,6 +35,14 @@ struct BoundedIISOptions {
   int max_iterations{20};
 };
 
+struct ConflictingConstraintDetail {
+  int row_index{-1};
+  std::string row_name;
+  std::string description;
+  double lower{0.0};
+  double upper{0.0};
+};
+
 struct BoundedIISResult {
   BoundedIISStatus status{BoundedIISStatus::ORIGINAL_MODEL_UNKNOWN};
   bool original_infeasible{false};
@@ -44,7 +52,10 @@ struct BoundedIISResult {
   double elapsed_sec{0.0};
   std::vector<int> conflicting_rows;
   std::vector<int> removed_rows;
+  std::vector<ConflictingConstraintDetail> conflict_details;
   std::string business_explanation;
+
+  std::string to_json() const;
 };
 
 BoundedIISResult computeBoundedIIS(
