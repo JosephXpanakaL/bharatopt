@@ -171,52 +171,35 @@ if uploaded_file and solve_button:
 
         c1, c2, c3 = st.columns(3)
         objective = result.get("objective")
-        safe_bound = result.get("certified_lower_bound")
-        gap = result.get("relative_gap")
+        bound = result.get("mccormick_global_upper_bound", result.get("certified_lower_bound"))
+        gap = result.get("nonlinear_gap", result.get("relative_gap"))
+        c1.metric("Objective", f"{objective:,.2f}" if isinstance(objective, (int, float)) else "Not reported")
+        c2.metric("Global / Certified Bound", f"{bound:,.2f}" if isinstance(bound, (int, float)) else "Not reported")
+        c3.metric("Gap", f"{gap * 100:.4f}%" if isinstance(gap, (int, float)) else "Not reported")
 
-        c1.metric("Solver Objective", f"₹ {objective:,.2f}" if isinstance(objective, (int, float)) else "Not reported")
-        c2.metric("Certified Lower Bound", f"₹ {safe_bound:,.2f}" if isinstance(safe_bound, (int, float)) else "Not reported")
-        c3.metric("Provable Gap", f"{gap * 100:.4f}%" if isinstance(gap, (int, float)) else "Not reported")
-
-        st.divider()
-        st.subheader("Refinery Pooling (Bilinear Blending)")
-        st.info(
-            "Pooling-specific SLP, McCormick global-bound, and nonlinear-gap values "
-            "are not produced by the current MPS CLI solve. They are intentionally "
-            "not estimated or filled with demo values."
-        )
+        if "variables" in result:
+            st.subheader("Optimized Refinery Variables")
+            st.dataframe(result["variables"], use_container_width=True, hide_index=True)
+            v = result.get("constraint_max_violation")
+            if isinstance(v, (int, float)):
+                if v <= 1e-6:
+                    st.success(f"Constraint audit passed: maximum violation = {v:.3e}")
+                else:
+                    st.warning(f"Constraint audit: maximum violation = {v:.3e}")
+            st.caption("The displayed solution is generated from the uploaded JSON model. SLP provides a feasible nonlinear solution when the constraint audit passes; the McCormick relaxation supplies a global upper bound for maximization.")
+        else:
+            st.info("This is an MPS linear/MILP solve. Pooling-specific nonlinear quantities are not inferred from an MPS file.")
 
     elif result.get("status", "").lower() == "infeasible":
-        st.error("🚨 CRITICAL: No feasible production plan exists.")
-        st.subheader("BharatOpt IIS Business Explainer")
-        st.warning(
-            "**Refined Conflict Identified (2.5s Execution Limit):**\n\n"
-            "The optimization engine has isolated a mathematical contradiction "
-            "between the following business requirements:"
-        )
-        st.markdown("""
-        * **HSD_MIN_DEMAND:** Minimum High-Speed Diesel demand (56,000 tonnes/day)
-        * **HSD_SULFUR_MAX:** Product quality upper bound (0.05 wt%)
-        * **CRUDE_ARAB_HEAVY:** Availability of low-sulfur crude
-        * **CDU_CAPACITY:** Maximum unit throughput
-
-        These constraints cannot be simultaneously satisfied.
-        """)
-        st.success(
-            "**Verified Corrective Action:**\n\n"
-            "Relax **HSD_SULFUR_MAX** by **0.020 wt%**.\n"
-            "BharatOpt has evaluated this trust-region step and verified that "
-            "this change restores refinery feasibility."
-        )
-        with st.expander("View Raw Farkas Certificate (Debugging)"):
-            farkas_data = result.get("farkas_multipliers", [])
-            if farkas_data:
+        st.error("No feasible production plan was found for the supplied model.")
+        st.caption("The current native CLI does not yet return a general Farkas certificate for every infeasible model, so no refinery-specific corrective action is invented here.")
+        farkas_data = result.get("farkas_multipliers", [])
+        if farkas_data:
+            with st.expander("View Farkas Certificate"):
                 st.json(farkas_data)
-            else:
-                st.info("No Farkas multipliers were returned by the native solver for this run.")
     else:
-        st.error(f"Solver Terminated Unexpectedly: {result.get('status')}")
-        st.write(result.get("error", "Unknown fatal error."))
+        st.error(f"Solver terminated: {result.get('status')}")
+        st.write(result.get("error", "Unknown solver error."))
 
 elif not uploaded_file:
     st.info("Upload a refinery model via the sidebar to begin.")
