@@ -169,10 +169,42 @@ static void write_contract_json(
     if (!out) throw std::runtime_error("Failed writing output file: " + path);
 }
 
+static void write_solution_csv(
+    const std::string& path,
+    const bharatopt::LPModel& m,
+    const bharatopt::SolverResult& r) {
+    std::ofstream out(path);
+    if (!out) throw std::runtime_error("Cannot open CSV output file: " + path);
+    out << "# BharatOpt Solution Export\n";
+    out << "# Status," << r.status << "\n";
+    out << "# Objective," << r.objective << "\n";
+    out << "# Iterations," << r.iterations << "\n";
+    out << "# TimeSec," << r.solve_time_sec << "\n\n";
+    out << "Type,Name,Value,Lower,Upper,ObjectiveCoeff\n";
+    for (std::size_t j = 0; j < m.var_names.size(); ++j) {
+        double val = (j < r.x.size()) ? r.x[j] : 0.0;
+        out << "Variable,\"" << m.var_names[j] << "\"," << val << ","
+            << m.lower[j] << "," << m.upper[j] << "," << m.objective[j] << "\n";
+    }
+    out << "\nType,Name,Activity,Lower,Upper,Slack\n";
+    for (std::size_t i = 0; i < m.A.rows; ++i) {
+        double ax = 0.0;
+        for (int k = m.A.row_ptr[i]; k < m.A.row_ptr[i+1]; ++k) {
+            if (static_cast<std::size_t>(m.A.col_index[k]) < r.x.size())
+                ax += m.A.values[k] * r.x[m.A.col_index[k]];
+        }
+        std::string rname = i < m.rows.size() ? m.rows[i].name : ("row_" + std::to_string(i));
+        double slack = 0.0;
+        if (std::isfinite(m.row_upper[i])) slack = m.row_upper[i] - ax;
+        out << "Constraint,\"" << rname << "\"," << ax << ","
+            << m.row_lower[i] << "," << m.row_upper[i] << "," << slack << "\n";
+    }
+}
+
 int main(int argc, char** argv) {
     bool demo = false, mip_demo = false, qp_demo = false, ip = false, pooling_demo = false, refinery_json = false;
     bool use_cuda = false, json = false, lp_only = false;
-    std::string mps, refinery_json_path, output_path, mode;
+    std::string mps, refinery_json_path, output_path, csv_output_path, mode;
     std::size_t global_nodes = 200;
     double global_gap = 1e-5;
     double global_time_limit = 30.0;
@@ -212,6 +244,8 @@ int main(int argc, char** argv) {
             mps = argv[++i];
         } else if (a == "--output" && i + 1 < argc) {
             output_path = argv[++i];
+        } else if (a == "--export-csv" && i + 1 < argc) {
+            csv_output_path = argv[++i];
         } else if (a == "--mode" && i + 1 < argc) {
             mode = argv[++i];
             if (mode != "certified") {
@@ -436,6 +470,10 @@ int main(int argc, char** argv) {
                       << " dual_residual=" << r.dual_residual
                       << " time_sec=" << r.solve_time_sec
                       << " backend=" << r.backend << "\n";
+        }
+
+        if (!csv_output_path.empty()) {
+            write_solution_csv(csv_output_path, m, r);
         }
 
         return r.converged ? 0 : 3;
