@@ -1,0 +1,41 @@
+{
+  "name": "MRPL-inspired refinery pooling",
+  "maximize": true,
+  "variables": [
+    {"name": "light_crude", "lower": 2, "upper": 10},
+    {"name": "heavy_crude", "lower": 2, "upper": 10},
+    {"name": "diesel_pool", "lower": 0, "upper": 10}
+  ],
+  "objective_linear": {
+    "light_crude": 100,
+    "heavy_crude": 80,
+    "diesel_pool": 20
+  },
+  "objective_bilinear": [
+    {"x": "light_crude", "y": "diesel_pool", "coefficient": 5},
+    {"x": "heavy_crude", "y": "diesel_pool", "coefficient": 3}
+  ],
+  "constraints": [
+    {
+      "name": "throughput",
+      "sense": "<=",
+      "rhs": 12,
+      "linear": {
+        "light_crude": 1,
+        "heavy_crude": 1,
+        "diesel_pool": 0.5
+      }
+    },
+    {
+      "name": "diesel_balance",
+      "sense": "<=",
+      "rhs": 6,
+      "linear": {
+        "diesel_pool": 1
+      },
+      "bilinear": [
+        {"x": "light_crude", "y": "diesel_pool", "coefficient": -0.1}
+      ]
+    }
+  ]
+}
