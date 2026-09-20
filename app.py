@@ -172,13 +172,14 @@ if uploaded_file and solve_button:
         else:
             st.success("Feasible production plan found; global certification not reached within the search limits.")
 
-        c1, c2, c3 = st.columns(3)
+        c1, c2, c3, c4 = st.columns(4)
         objective = result.get("objective")
         bound = result.get("mccormick_global_upper_bound", result.get("certified_lower_bound"))
         gap = result.get("nonlinear_gap", result.get("relative_gap"))
         c1.metric("Objective", f"{objective:,.2f}" if isinstance(objective, (int, float)) else "Not reported")
         c2.metric("Global / Solver Bound", f"{bound:,.2f}" if isinstance(bound, (int, float)) else "Not reported")
         c3.metric("Gap", f"{gap * 100:.4f}%" if isinstance(gap, (int, float)) else "Not reported")
+        c4.metric("B&B Nodes", f"{result.get('nodes_explored', 0):,}")
 
         if "variables" in result:
             st.subheader("Optimized Refinery Variables")
