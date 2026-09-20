@@ -144,7 +144,7 @@ with st.sidebar:
 
     st.divider()
     st.subheader("Engine Status")
-    st.success("Native C++ engine: Active")
+    st.info("Native C++ engine: built on demand")
     st.caption("JSON uploads use the configurable nonlinear refinery model. MPS uploads use the linear/MILP path.")
 
 if pooling_button:
