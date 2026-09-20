@@ -56,6 +56,10 @@ add_executable(bharatopt_bounded_iis_tests tests/test_bounded_iis.cpp)
 target_link_libraries(bharatopt_bounded_iis_tests PRIVATE bharatopt)
 add_test(NAME bharatopt_bounded_iis_tests COMMAND bharatopt_bounded_iis_tests)
 
+add_executable(bharatopt_refinery_model_tests tests/test_refinery_model.cpp)
+target_link_libraries(bharatopt_refinery_model_tests PRIVATE bharatopt)
+add_test(NAME bharatopt_refinery_model_tests COMMAND bharatopt_refinery_model_tests)
+
 include(GNUInstallDirs)
 install(TARGETS bharatopt bharatopt_cli
   ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
