@@ -6,8 +6,32 @@ from pathlib import Path
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 
+import sys
+
 ROOT = Path(__file__).resolve().parent
-BIN = os.environ.get("BHARATOPT_BIN", str(ROOT / "build" / "bharatopt_cli"))
+
+def find_solver_bin():
+    env_bin = os.environ.get("BHARATOPT_BIN")
+    if env_bin and Path(env_bin).exists():
+        return Path(env_bin)
+    candidates = [
+        ROOT / "build" / "bin" / "bharatopt_cli",
+        ROOT / "build" / "bin" / "bharatopt_cli.exe",
+        ROOT / "build" / "bin" / "bharatopt",
+        ROOT / "build" / "bin" / "bharatopt.exe",
+        ROOT / "build" / "bharatopt_cli",
+        ROOT / "build" / "bharatopt_cli.exe",
+        ROOT / "build" / "bharatopt",
+        ROOT / "build" / "bharatopt.exe",
+        ROOT / "build" / "Release" / "bharatopt_cli.exe",
+        ROOT / "build" / "Release" / "bharatopt.exe",
+    ]
+    for c in candidates:
+        if c.exists() and c.is_file():
+            return c
+    return ROOT / "build" / ("bharatopt_cli.exe" if sys.platform == "win32" else "bharatopt_cli")
+
+BIN = str(find_solver_bin())
 WEB = ROOT / "web" / "index.html"
 app = FastAPI(title="BharatOpt API", version="0.2.0")
 

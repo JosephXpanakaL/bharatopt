@@ -6,9 +6,35 @@ from pathlib import Path
 
 st.set_page_config(page_title="BharatOpt | MRPL", page_icon="🛢️", layout="wide")
 
+import sys
+
 PROJECT_ROOT = Path(__file__).resolve().parent
 BUILD_DIR = PROJECT_ROOT / "build-cloud"
-EXECUTABLE = BUILD_DIR / "bharatopt"
+
+def find_executable():
+    candidates = [
+        BUILD_DIR / "bharatopt.exe",
+        BUILD_DIR / "bharatopt",
+        BUILD_DIR / "bharatopt_cli.exe",
+        BUILD_DIR / "bharatopt_cli",
+        BUILD_DIR / "bin" / "bharatopt.exe",
+        BUILD_DIR / "bin" / "bharatopt",
+        BUILD_DIR / "Release" / "bharatopt.exe",
+        BUILD_DIR / "Release" / "bharatopt",
+        PROJECT_ROOT / "build" / "bin" / "bharatopt.exe",
+        PROJECT_ROOT / "build" / "bin" / "bharatopt",
+        PROJECT_ROOT / "build" / "bharatopt.exe",
+        PROJECT_ROOT / "build" / "bharatopt",
+        PROJECT_ROOT / "build" / "bharatopt_cli.exe",
+        PROJECT_ROOT / "build" / "bharatopt_cli",
+        PROJECT_ROOT / "build" / "Release" / "bharatopt.exe",
+    ]
+    for c in candidates:
+        if c.exists() and c.is_file():
+            return c
+    return BUILD_DIR / ("bharatopt.exe" if sys.platform == "win32" else "bharatopt")
+
+EXECUTABLE = find_executable()
 
 
 @st.cache_resource(show_spinner=False)
@@ -49,10 +75,11 @@ def ensure_bharatopt_engine():
         if compiled.returncode != 0:
             return None, "Native engine build failed:\n" + compiled.stderr[-6000:]
 
-        if not EXECUTABLE.exists():
-            return None, f"Build completed but {EXECUTABLE} was not produced."
+        found = find_executable()
+        if not found.exists():
+            return None, f"Build completed but {found} was not produced."
 
-        return EXECUTABLE, None
+        return found, None
     except subprocess.TimeoutExpired as exc:
         return None, f"Native engine build timed out: {exc}"
 
