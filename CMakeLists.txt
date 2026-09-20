@@ -66,3 +66,5 @@ install(TARGETS bharatopt bharatopt_cli
   RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+
+set_tests_properties(bharatopt_refinery_model_tests PROPERTIES WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
