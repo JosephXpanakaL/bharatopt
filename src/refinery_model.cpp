@@ -85,10 +85,10 @@ class Parser {
     while (pos_ < text_.size()) {
       char c = take();
       if (c == '"') return out;
-      if (c == '\') {
+      if (c == '\\') {
         char e = take();
         switch (e) {
-          case '"': case '\': case '/': out += e; break;
+          case '"': case '\\': case '/': out += e; break;
           case 'b': out += '\b'; break;
           case 'f': out += '\f'; break;
           case 'n': out += '\n'; break;
