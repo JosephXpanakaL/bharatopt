@@ -81,4 +81,48 @@ LPModel make_milp_demo(){
  LPModel m;m.name="MRPL-batch-selection-milp-demo";m.var_names={"unit_A","unit_B","unit_C"};m.objective={-7,-6,-5};m.lower={0,0,0};m.upper={1,1,1};m.integer={1,1,1};
  m.rows={{"budget",RowSense::LessEqual,2},{"coverage",RowSense::GreaterEqual,1}};m.A.rows=2;m.A.cols=3;m.A.row_ptr={0,3,6};m.A.col_index={0,1,2,0,1,2};m.A.values={1,1,1,1,1,0};m.row_lower={-INF,1};m.row_upper={2,INF};return m;
 }
+
+void write_mps(const LPModel& m, const std::string& path) {
+  std::ofstream out(path);
+  if (!out) throw std::runtime_error("Cannot open MPS output file: " + path);
+  out << "NAME          " << (m.name.empty() ? "BHARATOPT" : m.name) << "\n";
+  out << "OBJSENSE\n  " << (m.maximize ? "MAX" : "MIN") << "\n";
+  out << "ROWS\n N  OBJ\n";
+  for (std::size_t i = 0; i < m.rows.size(); ++i) {
+    char s = 'E';
+    if (m.rows[i].sense == RowSense::LessEqual) s = 'L';
+    else if (m.rows[i].sense == RowSense::GreaterEqual) s = 'G';
+    out << " " << s << "  " << m.rows[i].name << "\n";
+  }
+  out << "COLUMNS\n";
+  for (std::size_t j = 0; j < m.var_names.size(); ++j) {
+    if (std::abs(m.objective[j]) > 1e-12) {
+      out << "    " << m.var_names[j] << "  OBJ  " << m.objective[j] << "\n";
+    }
+  }
+  for (std::size_t i = 0; i < m.A.rows; ++i) {
+    for (int k = m.A.row_ptr[i]; k < m.A.row_ptr[i+1]; ++k) {
+      int j = m.A.col_index[k];
+      out << "    " << m.var_names[j] << "  " << m.rows[i].name << "  " << m.A.values[k] << "\n";
+    }
+  }
+  out << "RHS\n";
+  for (std::size_t i = 0; i < m.rows.size(); ++i) {
+    if (std::abs(m.rows[i].rhs) > 1e-12) {
+      out << "    RHS1  " << m.rows[i].name << "  " << m.rows[i].rhs << "\n";
+    }
+  }
+  out << "BOUNDS\n";
+  for (std::size_t j = 0; j < m.var_names.size(); ++j) {
+    if (j < m.integer.size() && m.integer[j]) {
+      out << " BV BND1 " << m.var_names[j] << "\n";
+    } else {
+      if (std::isfinite(m.lower[j])) out << " LO BND1 " << m.var_names[j] << " " << m.lower[j] << "\n";
+      if (std::isfinite(m.upper[j])) out << " UP BND1 " << m.var_names[j] << " " << m.upper[j] << "\n";
+    }
+  }
+  out << "ENDATA\n";
 }
+
+}
+
