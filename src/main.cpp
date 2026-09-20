@@ -1,5 +1,6 @@
 #include "bharatopt/mps.hpp"
 #include "bharatopt/pooling.hpp"
+#include "bharatopt/refinery_model.hpp"
 #include "bharatopt/interior_point.hpp"
 #include "bharatopt/qp.hpp"
 #include "bharatopt/solver.hpp"
@@ -9,6 +10,8 @@
 #include <fstream>
 #include <iostream>
 #include <string>
+#include <vector>
+#include <filesystem>
 
 static std::string js(const std::string& s) {
     std::string o = "\"";
@@ -42,6 +45,52 @@ static double integration_gap(const bharatopt::SolverResult& r) {
                (1.0 + std::abs(r.objective));
     }
     return 0.0;
+}
+
+static void write_refinery_json(
+    const std::string& path,
+    const bharatopt::RefineryModel& refinery,
+    const bharatopt::PoolingSLPResult& slp,
+    const bharatopt::McCormickRelaxation& mc) {
+    std::ofstream out(path);
+    if (!out) throw std::runtime_error("Cannot open output file: " + path);
+
+    const double bound = mc.solve_result.objective;
+    const double objective = slp.objective;
+    const double violation = slp.x.empty()
+        ? std::numeric_limits<double>::quiet_NaN()
+        : bharatopt::pooling_max_constraint_violation(refinery.pooling, slp.x);
+    double gap = std::numeric_limits<double>::quiet_NaN();
+    if (std::isfinite(bound) && std::isfinite(objective)) {
+        gap = std::max(0.0, bound - objective) /
+              (1.0 + std::abs(objective));
+    }
+
+    out << "{";
+    out << "\"status\":" << js(slp.feasible ? "feasible" : "infeasible");
+    out << ",\"model\":" << js(refinery.pooling.name);
+    out << ",\"objective\":"; jnum(out, objective);
+    out << ",\"mccormick_global_upper_bound\":"; jnum(out, bound);
+    out << ",\"nonlinear_gap\":"; jnum(out, gap);
+    out << ",\"constraint_max_violation\":"; jnum(out, violation);
+    out << ",\"slp_iterations\":" << slp.iterations;
+    out << ",\"accepted_steps\":" << slp.accepted_steps;
+    out << ",\"rejected_steps\":" << slp.rejected_steps;
+    out << ",\"trust_radius\":"; jnum(out, slp.trust_radius);
+    out << ",\"improvement_ratio\":"; jnum(out, slp.improvement_ratio);
+    out << ",\"solver_status\":" << js(slp.status);
+    out << ",\"mccormick_status\":" << js(mc.solve_result.status);
+    out << ",\"mccormick_converged\":" << (mc.solve_result.converged ? "true" : "false");
+    out << ",\"variables\":[";
+    for (std::size_t i = 0; i < refinery.pooling.linear.var_names.size(); ++i) {
+        if (i) out << ",";
+        out << "{\"name\":" << js(refinery.pooling.linear.var_names[i])
+            << ",\"value\":";
+        if (i < slp.x.size()) jnum(out, slp.x[i]); else out << "null";
+        out << "}";
+    }
+    out << "]}\n";
+    if (!out) throw std::runtime_error("Failed writing refinery output: " + path);
 }
 
 static void write_pooling_json(
@@ -123,9 +172,9 @@ static void write_contract_json(
 }
 
 int main(int argc, char** argv) {
-    bool demo = false, mip_demo = false, qp_demo = false, ip = false, pooling_demo = false;
+    bool demo = false, mip_demo = false, qp_demo = false, ip = false, pooling_demo = false, refinery_json = false;
     bool use_cuda = false, json = false, lp_only = false;
-    std::string mps, output_path, mode;
+    std::string mps, refinery_json_path, output_path, mode;
 
     bharatopt::SolverOptions opt;
 
@@ -142,6 +191,9 @@ int main(int argc, char** argv) {
             qp_demo = true;
         } else if (a == "--pooling-demo") {
             pooling_demo = true;
+        } else if (a == "--refinery-json" && i + 1 < argc) {
+            refinery_json = true;
+            refinery_json_path = argv[++i];
         } else if (a == "--ip") {
             ip = true;
         } else if (a == "--cuda") {
@@ -184,6 +236,38 @@ int main(int argc, char** argv) {
     try {
         bharatopt::BharatOptSolverCore solver;
         opt.use_cuda = use_cuda;
+
+        if (refinery_json || (!mps.empty() && std::filesystem::path(mps).extension() == ".json")) {
+            const std::string path = refinery_json ? refinery_json_path : mps;
+            auto refinery = bharatopt::parse_refinery_json(path);
+            bharatopt::validate_refinery_model(refinery);
+
+            bharatopt::PoolingSLPOptions pooling_options;
+            pooling_options.lp_options = opt;
+            pooling_options.max_iterations = 30;
+            pooling_options.initial_trust_radius = 1.0;
+            pooling_options.minimum_trust_radius = 1e-8;
+            pooling_options.maximum_trust_radius = 8.0;
+
+            auto slp = bharatopt::solve_pooling_slp(
+                refinery.pooling, solver, pooling_options);
+            auto mc = bharatopt::solve_mccormick_relaxation(
+                refinery.pooling, solver, opt);
+
+            if (!output_path.empty()) {
+                write_refinery_json(output_path, refinery, slp, mc);
+            } else {
+                write_refinery_json("/tmp/bharatopt_refinery_result.json", refinery, slp, mc);
+                std::cout << "BharatOpt | model=" << refinery.pooling.name << "\n";
+                std::cout << "status=" << (slp.feasible ? "feasible" : "infeasible")
+                          << " objective=" << slp.objective
+                          << " mccormick_upper_bound=" << mc.solve_result.objective
+                          << " max_constraint_violation="
+                          << bharatopt::pooling_max_constraint_violation(refinery.pooling, slp.x)
+                          << "\n";
+            }
+            return slp.feasible ? 0 : 3;
+        }
 
         if (pooling_demo) {
             auto model = make_mrpl_pooling_model();
@@ -276,7 +360,7 @@ int main(int argc, char** argv) {
         } else if (!mps.empty()) {
             m = bharatopt::parse_mps(mps);
         } else {
-            std::cerr << "Use --demo, --mip-demo, --qp-demo, --pooling-demo, --ip or --input file.mps\n";
+            std::cerr << "Use --demo, --mip-demo, --qp-demo, --pooling-demo, --refinery-json file.json, --ip or --input file.mps\n";
             return 2;
         }
 
