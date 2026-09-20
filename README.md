@@ -38,7 +38,8 @@ BharatOpt is a from-scratch sparse mathematical optimization engine. The core is
 ### Nonlinear pooling / refinery models
 - Configurable JSON model input with named continuous variables, bounds, linear objective terms, bilinear objective terms, linear constraints and bilinear constraint terms.
 - Sequential Linear Programming (SLP) with trust-region acceptance/rejection based on predicted versus true nonlinear improvement.
-- McCormick convex-hull relaxation for bilinear terms; for maximization, its solved objective is reported as a global upper bound on the nonlinear optimum.
+- McCormick convex-hull relaxation for bilinear terms; for maximization, its solved objective is a valid global upper bound on the nonlinear optimum.
+- Deterministic spatial branch-and-bound splits the loosest bilinear variable bounds, resolves McCormick relaxations, and reports a global optimality certificate when the remaining bound is within tolerance.
 - Post-solve nonlinear constraint audit reports the maximum true-model violation and the actual variable values used by the SLP solution.
 - The web console accepts `.json` refinery models directly; the built-in pooling benchmark remains available only as an engine regression check.
 
