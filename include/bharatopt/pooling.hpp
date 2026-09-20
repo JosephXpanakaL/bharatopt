@@ -100,6 +100,33 @@ struct McCormickRelaxation {
 McCormickRelaxation build_mccormick_relaxation(
     const PoolingModel& model);
 
+struct GlobalPoolingOptions {
+  PoolingSLPOptions slp_options{};
+  SolverOptions relaxation_options{};
+  std::size_t max_nodes{200};
+  double time_limit_sec{30.0};
+  double absolute_gap{1e-5};
+  double relative_gap{1e-5};
+};
+
+struct GlobalPoolingResult {
+  bool feasible{false};
+  bool certified{false};
+  std::size_t nodes_explored{0};
+  std::size_t nodes_pruned{0};
+  double objective{std::numeric_limits<double>::quiet_NaN()};
+  double global_bound{std::numeric_limits<double>::quiet_NaN()};
+  double optimality_gap{std::numeric_limits<double>::quiet_NaN()};
+  std::vector<double> x;
+  std::string status;
+  PoolingSLPResult incumbent;
+};
+
+GlobalPoolingResult solve_global_pooling(
+    const PoolingModel& model,
+    BharatOptSolverCore& solver,
+    const GlobalPoolingOptions& options = {});
+
 McCormickRelaxation solve_mccormick_relaxation(
     const PoolingModel& model,
     BharatOptSolverCore& solver,
