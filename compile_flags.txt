@@ -9,6 +9,8 @@
 //wsl.localhost/Ubuntu-26.04/usr/include/x86_64-linux-gnu
 -xc++
 -std=c++20
+-IC:/Users/bless/OneDrive/Desktop/BharatOPT/include
+-IC:/Users/bless/OneDrive/Desktop/BharatOPT/include/nlohmann
 -Iinclude
 -Iinclude/nlohmann
 -Wno-unknown-pragmas
