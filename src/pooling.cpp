@@ -1010,4 +1010,221 @@ PoolingSLPResult solve_pooling_slp(
   return result;
 }
 
+
+GlobalPoolingResult solve_global_pooling(
+    const PoolingModel& model,
+    BharatOptSolverCore& solver,
+    const GlobalPoolingOptions& options) {
+  validate_model(model);
+  if (options.max_nodes == 0) {
+    throw std::invalid_argument("Global pooling max_nodes must be positive");
+  }
+  if (options.time_limit_sec <= 0.0) {
+    throw std::invalid_argument("Global pooling time_limit_sec must be positive");
+  }
+
+  GlobalPoolingResult result;
+  const auto started = std::chrono::steady_clock::now();
+
+  struct Node {
+    PoolingModel model;
+    double bound{-INF};
+    std::size_t depth{0};
+  };
+
+  auto gap_value = [&](double upper, double lower) {
+    if (!std::isfinite(upper) || !std::isfinite(lower)) return INF;
+    return std::max(0.0, upper - lower);
+  };
+
+  // The current engine is a maximization-oriented refinery planner.
+  // For minimization, retain the root relaxation result but do not claim
+  // global certification from this branch-and-bound implementation.
+  if (!model.linear.maximize) {
+    auto slp = solve_pooling_slp(model, solver, options.slp_options);
+    auto mc = solve_mccormick_relaxation(model, solver, options.relaxation_options);
+    result.incumbent = slp;
+    result.feasible = slp.feasible;
+    result.objective = slp.objective;
+    result.global_bound = mc.global_lower_bound;
+    result.optimality_gap =
+        std::isfinite(result.global_bound) && std::isfinite(result.objective)
+          ? std::max(0.0, result.objective - result.global_bound)
+          : INF;
+    result.status = "MINIMIZATION_ROOT_RELAXATION_ONLY";
+    return result;
+  }
+
+  auto root_slp = solve_pooling_slp(model, solver, options.slp_options);
+  if (root_slp.feasible && std::isfinite(root_slp.objective)) {
+    result.feasible = true;
+    result.objective = root_slp.objective;
+    result.x = root_slp.x;
+    result.incumbent = root_slp;
+  }
+
+  auto root_mc = solve_mccormick_relaxation(
+      model, solver, options.relaxation_options);
+  if (!root_mc.has_global_upper_bound) {
+    result.status = "ROOT_RELAXATION_FAILED";
+    return result;
+  }
+
+  std::vector<Node> pending;
+  pending.push_back({model, root_mc.global_upper_bound, 0});
+
+  while (!pending.empty() &&
+         result.nodes_explored < options.max_nodes) {
+    const auto now = std::chrono::steady_clock::now();
+    const double elapsed =
+        std::chrono::duration<double>(now - started).count();
+    if (elapsed >= options.time_limit_sec) break;
+
+    // Best-bound selection: process the node with the largest upper bound.
+    auto best_it = std::max_element(
+        pending.begin(), pending.end(),
+        [](const Node& a, const Node& b) { return a.bound < b.bound; });
+    Node node = std::move(*best_it);
+    pending.erase(best_it);
+    ++result.nodes_explored;
+
+    const double required_gap =
+        options.absolute_gap +
+        options.relative_gap * (1.0 + std::abs(result.objective));
+
+    if (result.feasible &&
+        node.bound <= result.objective + required_gap) {
+      ++result.nodes_pruned;
+      continue;
+    }
+
+    auto slp = solve_pooling_slp(node.model, solver, options.slp_options);
+    if (slp.feasible && std::isfinite(slp.objective) &&
+        (!result.feasible || slp.objective > result.objective)) {
+      result.feasible = true;
+      result.objective = slp.objective;
+      result.x = slp.x;
+      result.incumbent = slp;
+    }
+
+    auto mc = solve_mccormick_relaxation(
+        node.model, solver, options.relaxation_options);
+    if (!mc.has_global_upper_bound) {
+      ++result.nodes_pruned;
+      continue;
+    }
+
+    const double upper = mc.global_upper_bound;
+    const double incumbent_gap =
+        result.feasible ? gap_value(upper, result.objective) : INF;
+
+    const double current_required_gap =
+        options.absolute_gap +
+        options.relative_gap *
+          (1.0 + (result.feasible ? std::abs(result.objective) : 0.0));
+
+    if (result.feasible && incumbent_gap <= current_required_gap) {
+      ++result.nodes_pruned;
+      continue;
+    }
+
+    // Find the widest/loosest bilinear term and split its wider variable.
+    int split_var = -1;
+    double split_score = -1.0;
+    auto inspect_term = [&](const BilinearTerm& term) {
+      const double lx = node.model.linear.lower[static_cast<std::size_t>(term.left)];
+      const double ux = node.model.linear.upper[static_cast<std::size_t>(term.left)];
+      const double ly = node.model.linear.lower[static_cast<std::size_t>(term.right)];
+      const double uy = node.model.linear.upper[static_cast<std::size_t>(term.right)];
+      const double width_x = ux - lx;
+      const double width_y = uy - ly;
+      const double score = width_x * width_y;
+      if (score > split_score) {
+        split_score = score;
+        split_var = width_x >= width_y ? term.left : term.right;
+      }
+    };
+
+    for (const auto& term : node.model.objective_bilinear) inspect_term(term);
+    for (const auto& row : node.model.constraint_bilinear)
+      for (const auto& term : row) inspect_term(term);
+
+    if (split_var < 0 || split_score <= 1e-14) {
+      ++result.nodes_pruned;
+      continue;
+    }
+
+    const std::size_t j = static_cast<std::size_t>(split_var);
+    const double lo = node.model.linear.lower[j];
+    const double hi = node.model.linear.upper[j];
+    const double mid = 0.5 * (lo + hi);
+    if (!(mid > lo && mid < hi)) {
+      ++result.nodes_pruned;
+      continue;
+    }
+
+    PoolingModel left = node.model;
+    PoolingModel right = node.model;
+    left.linear.upper[j] = mid;
+    right.linear.lower[j] = mid;
+
+    auto push_child = [&](PoolingModel child) {
+      auto child_mc = solve_mccormick_relaxation(
+          child, solver, options.relaxation_options);
+      if (!child_mc.has_global_upper_bound) return;
+      if (result.feasible) {
+        const double required =
+            options.absolute_gap +
+            options.relative_gap * (1.0 + std::abs(result.objective));
+        if (child_mc.global_upper_bound <= result.objective + required) {
+          ++result.nodes_pruned;
+          return;
+        }
+      }
+      pending.push_back({
+          std::move(child),
+          child_mc.global_upper_bound,
+          node.depth + 1});
+    };
+
+    push_child(std::move(left));
+    push_child(std::move(right));
+  }
+
+  double remaining_upper = -INF;
+  for (const auto& node : pending)
+    remaining_upper = std::max(remaining_upper, node.bound);
+
+  result.global_bound = pending.empty()
+      ? (result.feasible ? result.objective : root_mc.global_upper_bound)
+      : remaining_upper;
+
+  if (!result.feasible) {
+    result.status = "NO_FEASIBLE_SOLUTION_FOUND";
+    result.optimality_gap = INF;
+    return result;
+  }
+
+  result.optimality_gap =
+      std::max(0.0, result.global_bound - result.objective);
+
+  const double tolerance =
+      options.absolute_gap +
+      options.relative_gap * (1.0 + std::abs(result.objective));
+
+  result.certified =
+      result.optimality_gap <= tolerance &&
+      pending.empty();
+
+  if (result.certified) {
+    result.status = "GLOBAL_OPTIMAL_WITHIN_TOLERANCE";
+  } else if (pending.empty()) {
+    result.status = "GLOBAL_SEARCH_EXHAUSTED";
+  } else {
+    result.status = "GLOBAL_SEARCH_LIMIT_REACHED";
+  }
+
+  return result;
+}
+
 } // namespace bharatopt
