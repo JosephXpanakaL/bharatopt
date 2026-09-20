@@ -645,13 +645,15 @@ McCormickRelaxation solve_mccormick_relaxation(
   result.solve_result =
       solver.solve(result.relaxation, options);
 
-  if (!model.linear.maximize &&
-      result.solve_result.x.size() ==
-          result.relaxation.A.cols &&
+  if (result.solve_result.x.size() == result.relaxation.A.cols &&
       std::isfinite(result.solve_result.objective)) {
-    result.global_lower_bound =
-        result.solve_result.objective;
-    result.has_global_lower_bound = true;
+    if (model.linear.maximize) {
+      result.global_upper_bound = result.solve_result.objective;
+      result.has_global_upper_bound = true;
+    } else {
+      result.global_lower_bound = result.solve_result.objective;
+      result.has_global_lower_bound = true;
+    }
   }
 
   return result;
@@ -735,12 +737,9 @@ PoolingSLPResult solve_pooling_slp(
 
   const std::size_t n = model.linear.A.cols;
 
-  Vec x = model.linear.lower;
-
+  Vec x(n, 0.0);
   for (std::size_t j = 0; j < n; ++j) {
-    x[j] = 0.5 * (
-        model.linear.lower[j] +
-        model.linear.upper[j]);
+    x[j] = 0.5 * (model.linear.lower[j] + model.linear.upper[j]);
   }
 
   PoolingSLPResult result;
@@ -752,19 +751,96 @@ PoolingSLPResult solve_pooling_slp(
       options.minimum_trust_radius,
       options.maximum_trust_radius);
 
-  /*
-   * The SLP layer expects the initial operating point to satisfy the
-   * TRUE nonlinear model. Finding an initial feasible point belongs to
-   * the Simplex/Phase-1 integration rather than this trust-region hook.
-   */
+  // Deterministic feasibility restoration. This is not a global certificate;
+  // it only searches for a valid nonlinear starting point for SLP.
+  auto violation = [&](const Vec& z) {
+    double worst = 0.0;
+    for (std::size_t j = 0; j < n; ++j) {
+      worst = std::max(worst, model.linear.lower[j] - z[j]);
+      worst = std::max(worst, z[j] - model.linear.upper[j]);
+    }
+    for (std::size_t r = 0; r < model.linear.A.rows; ++r) {
+      double az = 0.0;
+      for (std::size_t k = model.linear.A.row_ptr[r];
+           k < model.linear.A.row_ptr[r + 1]; ++k) {
+        az += model.linear.A.values[k] *
+              z[static_cast<std::size_t>(model.linear.A.col_index[k])];
+      }
+      for (const auto& t : model.constraint_bilinear[r]) {
+        az += t.coefficient * z[static_cast<std::size_t>(t.left)] *
+              z[static_cast<std::size_t>(t.right)];
+      }
+      if (std::isfinite(model.linear.row_lower[r]))
+        worst = std::max(worst, model.linear.row_lower[r] - az);
+      if (std::isfinite(model.linear.row_upper[r]))
+        worst = std::max(worst, az - model.linear.row_upper[r]);
+    }
+    return std::max(0.0, worst);
+  };
+
+  double best_violation = violation(x);
+  if (best_violation > options.lp_options.tolerance) {
+    auto consider = [&](const Vec& candidate) {
+      const double v = violation(candidate);
+      if (v < best_violation) {
+        best_violation = v;
+        x = candidate;
+      }
+    };
+
+    consider(model.linear.lower);
+    consider(model.linear.upper);
+
+    // Deterministic low-discrepancy samples plus coordinate restoration.
+    std::uint64_t state = 0x9e3779b97f4a7c15ULL;
+    const int attempts = std::max(0, options.feasibility_search_attempts);
+    for (int attempt = 0; attempt < attempts &&
+         best_violation > options.lp_options.tolerance; ++attempt) {
+      Vec candidate(n, 0.0);
+      for (std::size_t j = 0; j < n; ++j) {
+        state ^= state << 7;
+        state ^= state >> 9;
+        const double u = static_cast<double>(state & 0xFFFFFFULL) /
+                         static_cast<double>(0x1000000ULL);
+        candidate[j] = model.linear.lower[j] +
+                       u * (model.linear.upper[j] - model.linear.lower[j]);
+      }
+      consider(candidate);
+    }
+
+    const double step_fraction =
+        std::clamp(options.feasibility_search_step_fraction, 0.01, 0.5);
+    for (int pass = 0; pass < 8 &&
+         best_violation > options.lp_options.tolerance; ++pass) {
+      bool improved = false;
+      for (std::size_t j = 0; j < n; ++j) {
+        const double lo = model.linear.lower[j];
+        const double hi = model.linear.upper[j];
+        const double span = hi - lo;
+        for (double f : {0.0, step_fraction, 0.5, 1.0 - step_fraction, 1.0}) {
+          Vec candidate = x;
+          candidate[j] = lo + f * span;
+          const double before = best_violation;
+          consider(candidate);
+          improved = improved || best_violation < before;
+        }
+      }
+      if (!improved) break;
+    }
+  }
+
   if (!nonlinear_feasible(
-          model,
-          x,
-          options.lp_options.tolerance)) {
-    result.status = "INITIAL_POINT_INFEASIBLE";
+          model, x, options.lp_options.tolerance)) {
+    result.x = x;
+    result.objective = true_objective(model, x);
+    result.status = "NO_FEASIBLE_START_FOUND";
     result.feasible = false;
     return result;
   }
+
+  result.x = x;
+  result.objective = true_objective(model, x);
+  result.initial_objective = result.objective;
 
   result.feasible = true;
   double radius = result.trust_radius;
