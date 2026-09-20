@@ -387,7 +387,31 @@ int main(int argc, char** argv) {
                       << ",\"objective\":"; jnum(std::cout, r.objective);
             std::cout << ",\"certified_lower_bound\":"; jnum(std::cout, r.best_bound);
             std::cout << ",\"relative_gap\":"; jnum(std::cout, integration_gap(r));
-            std::cout << ",\"farkas_multipliers\":[]}\n";
+            std::cout << ",\"iterations\":" << r.iterations;
+            std::cout << ",\"time_sec\":" << r.solve_time_sec;
+            std::cout << ",\"backend\":" << js(r.backend);
+            std::cout << ",\"variables\":[";
+            for (std::size_t j = 0; j < m.var_names.size(); ++j) {
+                if (j) std::cout << ",";
+                std::cout << "{\"name\":" << js(m.var_names[j]) << ",\"value\":";
+                if (j < r.x.size()) jnum(std::cout, r.x[j]); else std::cout << "null";
+                std::cout << "}";
+            }
+            std::cout << "],\"constraints\":[";
+            for (std::size_t i = 0; i < m.A.rows; ++i) {
+                if (i) std::cout << ",";
+                double ax = 0.0;
+                for (int k = m.A.row_ptr[i]; k < m.A.row_ptr[i + 1]; ++k) {
+                    if (static_cast<std::size_t>(m.A.col_index[k]) < r.x.size())
+                        ax += m.A.values[k] * r.x[m.A.col_index[k]];
+                }
+                std::string rname = i < m.rows.size() ? m.rows[i].name : ("row_" + std::to_string(i));
+                std::cout << "{\"name\":" << js(rname) << ",\"activity\":"; jnum(std::cout, ax);
+                std::cout << ",\"lower\":"; jnum(std::cout, m.row_lower[i]);
+                std::cout << ",\"upper\":"; jnum(std::cout, m.row_upper[i]);
+                std::cout << "}";
+            }
+            std::cout << "],\"farkas_multipliers\":[]}\n";
         } else {
             std::cout << "BharatOpt | model=" << m.name
                       << " rows=" << m.A.rows
