@@ -24,7 +24,6 @@
 //     void set_objective_coeff(int var, double coeff);   // maximize sense
 //   };
 
-#include <optional>
 #include <string>
 #include <vector>
 
