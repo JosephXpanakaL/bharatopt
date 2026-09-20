@@ -51,44 +51,37 @@ static double integration_gap(const bharatopt::SolverResult& r) {
 static void write_refinery_json(
     const std::string& path,
     const bharatopt::RefineryModel& refinery,
-    const bharatopt::PoolingSLPResult& slp,
-    const bharatopt::McCormickRelaxation& mc) {
+    const bharatopt::GlobalPoolingResult& global) {
     std::ofstream out(path);
     if (!out) throw std::runtime_error("Cannot open output file: " + path);
 
-    const double bound = mc.has_global_upper_bound ? mc.global_upper_bound : mc.solve_result.objective;
-    const double objective = slp.objective;
-    const double violation = slp.x.empty()
-        ? std::numeric_limits<double>::quiet_NaN()
-        : bharatopt::pooling_max_constraint_violation(refinery.pooling, slp.x);
-    double gap = std::numeric_limits<double>::quiet_NaN();
-    if (std::isfinite(bound) && std::isfinite(objective)) {
-        gap = std::max(0.0, bound - objective) /
-              (1.0 + std::abs(objective));
-    }
+    const double objective = global.objective;
+    const double bound = global.global_bound;
+    const double gap = global.optimality_gap;
+    const bool audited = global.feasible && !global.x.empty() &&
+        std::isfinite(objective) &&
+        bharatopt::pooling_max_constraint_violation(refinery.pooling, global.x) <= 1e-6;
 
     out << "{";
-    out << "\"status\":" << js(slp.feasible ? "feasible" : "infeasible");
+    out << "\"status\":" << js(global.status);
     out << ",\"model\":" << js(refinery.pooling.name);
     out << ",\"objective\":"; jnum(out, objective);
+    out << ",\"global_upper_bound\":"; jnum(out, bound);
     out << ",\"mccormick_global_upper_bound\":"; jnum(out, bound);
-    out << ",\"global_optimality_certified\":" << (certified ? "true" : "false");
     out << ",\"nonlinear_gap\":"; jnum(out, gap);
-    out << ",\"constraint_max_violation\":"; jnum(out, violation);
-    out << ",\"slp_iterations\":" << slp.iterations;
-    out << ",\"accepted_steps\":" << slp.accepted_steps;
-    out << ",\"rejected_steps\":" << slp.rejected_steps;
-    out << ",\"trust_radius\":"; jnum(out, slp.trust_radius);
-    out << ",\"improvement_ratio\":"; jnum(out, slp.improvement_ratio);
-    out << ",\"solver_status\":" << js(slp.status);
-    out << ",\"mccormick_status\":" << js(mc.solve_result.status);
-    out << ",\"mccormick_converged\":" << (mc.solve_result.converged ? "true" : "false");
+    out << ",\"global_optimality_certified\":" << (global.certified ? "true" : "false");
+    out << ",\"constraint_audit_passed\":" << (audited ? "true" : "false");
+    out << ",\"constraint_max_violation\":";
+    if (global.x.empty()) out << "null";
+    else jnum(out, bharatopt::pooling_max_constraint_violation(refinery.pooling, global.x));
+    out << ",\"nodes_explored\":" << global.nodes_explored;
+    out << ",\"nodes_pruned\":" << global.nodes_pruned;
     out << ",\"variables\":[";
     for (std::size_t i = 0; i < refinery.pooling.linear.var_names.size(); ++i) {
         if (i) out << ",";
         out << "{\"name\":" << js(refinery.pooling.linear.var_names[i])
             << ",\"value\":";
-        if (i < slp.x.size()) jnum(out, slp.x[i]); else out << "null";
+        if (i < global.x.size()) jnum(out, global.x[i]); else out << "null";
         out << "}";
     }
     out << "]}\n";
@@ -244,31 +237,34 @@ int main(int argc, char** argv) {
             auto refinery = bharatopt::parse_refinery_json(path);
             bharatopt::validate_refinery_model(refinery);
 
-            bharatopt::PoolingSLPOptions pooling_options;
-            pooling_options.lp_options = opt;
-            pooling_options.max_iterations = 30;
-            pooling_options.initial_trust_radius = 1.0;
-            pooling_options.minimum_trust_radius = 1e-8;
-            pooling_options.maximum_trust_radius = 8.0;
+            bharatopt::GlobalPoolingOptions global_options;
+            global_options.slp_options.lp_options = opt;
+            global_options.slp_options.max_iterations = 30;
+            global_options.slp_options.initial_trust_radius = 1.0;
+            global_options.slp_options.minimum_trust_radius = 1e-8;
+            global_options.slp_options.maximum_trust_radius = 8.0;
+            global_options.relaxation_options = opt;
+            global_options.max_nodes = 200;
+            global_options.time_limit_sec = std::max(5.0, opt.time_limit_sec > 0.0 ? opt.time_limit_sec : 30.0);
+            global_options.absolute_gap = 1e-5;
+            global_options.relative_gap = 1e-5;
 
-            auto slp = bharatopt::solve_pooling_slp(
-                refinery.pooling, solver, pooling_options);
-            auto mc = bharatopt::solve_mccormick_relaxation(
-                refinery.pooling, solver, opt);
+            auto global = bharatopt::solve_global_pooling(
+                refinery.pooling, solver, global_options);
 
             if (!output_path.empty()) {
-                write_refinery_json(output_path, refinery, slp, mc);
+                write_refinery_json(output_path, refinery, global);
             } else {
-                write_refinery_json("/tmp/bharatopt_refinery_result.json", refinery, slp, mc);
+                write_refinery_json("/tmp/bharatopt_refinery_result.json", refinery, global);
                 std::cout << "BharatOpt | model=" << refinery.pooling.name << "\n";
-                std::cout << "status=" << (slp.feasible ? "feasible" : "infeasible")
-                          << " objective=" << slp.objective
-                          << " mccormick_upper_bound=" << mc.solve_result.objective
-                          << " max_constraint_violation="
-                          << bharatopt::pooling_max_constraint_violation(refinery.pooling, slp.x)
+                std::cout << "status=" << global.status
+                          << " objective=" << global.objective
+                          << " global_upper_bound=" << global.global_bound
+                          << " gap=" << global.optimality_gap
+                          << " nodes=" << global.nodes_explored
                           << "\n";
             }
-            return slp.feasible ? 0 : 3;
+            return global.feasible ? 0 : 3;
         }
 
         if (pooling_demo) {
