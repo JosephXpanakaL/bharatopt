@@ -170,6 +170,9 @@ int main(int argc, char** argv) {
     bool demo = false, mip_demo = false, qp_demo = false, ip = false, pooling_demo = false, refinery_json = false;
     bool use_cuda = false, json = false, lp_only = false;
     std::string mps, refinery_json_path, output_path, mode;
+    std::size_t global_nodes = 200;
+    double global_gap = 1e-5;
+    double global_time_limit = 30.0;
 
     bharatopt::SolverOptions opt;
 
@@ -218,6 +221,12 @@ int main(int argc, char** argv) {
             opt.mip_gap = std::stod(argv[++i]);
         } else if (a == "--time-limit" && i + 1 < argc) {
             opt.time_limit_sec = std::stod(argv[++i]);
+        } else if (a == "--global-nodes" && i + 1 < argc) {
+            global_nodes = static_cast<std::size_t>(std::stoull(argv[++i]));
+        } else if (a == "--global-gap" && i + 1 < argc) {
+            global_gap = std::stod(argv[++i]);
+        } else if (a == "--global-time-limit" && i + 1 < argc) {
+            global_time_limit = std::stod(argv[++i]);
         } else if (a == "--no-presolve") {
             opt.presolve = false;
         } else if (a == "--scaling-passes" && i + 1 < argc) {
@@ -244,10 +253,10 @@ int main(int argc, char** argv) {
             global_options.slp_options.minimum_trust_radius = 1e-8;
             global_options.slp_options.maximum_trust_radius = 8.0;
             global_options.relaxation_options = opt;
-            global_options.max_nodes = 200;
-            global_options.time_limit_sec = std::max(5.0, opt.time_limit_sec > 0.0 ? opt.time_limit_sec : 30.0);
-            global_options.absolute_gap = 1e-5;
-            global_options.relative_gap = 1e-5;
+            global_options.max_nodes = global_nodes;
+            global_options.time_limit_sec = std::max(1.0, opt.time_limit_sec > 0.0 ? opt.time_limit_sec : global_time_limit);
+            global_options.absolute_gap = global_gap;
+            global_options.relative_gap = global_gap;
 
             auto global = bharatopt::solve_global_pooling(
                 refinery.pooling, solver, global_options);
@@ -358,7 +367,7 @@ int main(int argc, char** argv) {
         } else if (!mps.empty()) {
             m = bharatopt::parse_mps(mps);
         } else {
-            std::cerr << "Use --demo, --mip-demo, --qp-demo, --pooling-demo, --refinery-json file.json, --ip or --input file.mps\n";
+            std::cerr << "Use --demo, --mip-demo, --qp-demo, --pooling-demo, --refinery-json file.json, --global-nodes N, --global-gap G, --global-time-limit S, --ip or --input file.mps\n";
             return 2;
         }
 
