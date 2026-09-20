@@ -14,7 +14,10 @@ EXECUTABLE = BUILD_DIR / "bharatopt"
 @st.cache_resource(show_spinner=False)
 def ensure_bharatopt_engine():
     """Build the native CPU engine once per Streamlit runtime."""
-    # Always run the incremental native build once per Streamlit runtime.\n    # This prevents a persistent build directory from keeping an older CLI\n    # binary after a new C++ source revision is deployed.\n    configure = [
+    # Always run the incremental native build once per Streamlit runtime.
+    # This prevents a persistent build directory from keeping an older CLI
+    # binary after a new C++ source revision is deployed.
+    configure = [
         "cmake",
         "-S", str(PROJECT_ROOT),
         "-B", str(BUILD_DIR),
@@ -76,6 +79,7 @@ def run_pooling_engine(timeout_seconds=30.0):
             return json.loads(output_path.read_text(encoding="utf-8"))
         except json.JSONDecodeError as exc:
             return {"status": "CRASH", "error": f"Pooling engine returned invalid JSON: {exc}"}
+
 
 def solve_with_bharatopt_cli(uploaded_file, timeout_seconds=15.0):
     exe, build_error = ensure_bharatopt_engine()
@@ -181,18 +185,9 @@ if uploaded_file and solve_button:
         safe_bound = result.get("certified_lower_bound")
         gap = result.get("relative_gap")
 
-        c1.metric(
-            "Solver Objective",
-            f"₹ {objective:,.2f}" if isinstance(objective, (int, float)) else "Not reported",
-        )
-        c2.metric(
-            "Certified Lower Bound",
-            f"₹ {safe_bound:,.2f}" if isinstance(safe_bound, (int, float)) else "Not reported",
-        )
-        c3.metric(
-            "Provable Gap",
-            f"{gap * 100:.4f}%" if isinstance(gap, (int, float)) else "Not reported",
-        )
+        c1.metric("Solver Objective", f"₹ {objective:,.2f}" if isinstance(objective, (int, float)) else "Not reported")
+        c2.metric("Certified Lower Bound", f"₹ {safe_bound:,.2f}" if isinstance(safe_bound, (int, float)) else "Not reported")
+        c3.metric("Provable Gap", f"{gap * 100:.4f}%" if isinstance(gap, (int, float)) else "Not reported")
 
         st.divider()
         st.subheader("Refinery Pooling (Bilinear Blending)")
@@ -204,14 +199,12 @@ if uploaded_file and solve_button:
 
     elif result.get("status", "").lower() == "infeasible":
         st.error("🚨 CRITICAL: No feasible production plan exists.")
-
         st.subheader("BharatOpt IIS Business Explainer")
         st.warning(
             "**Refined Conflict Identified (2.5s Execution Limit):**\n\n"
             "The optimization engine has isolated a mathematical contradiction "
             "between the following business requirements:"
         )
-
         st.markdown("""
         * **HSD_MIN_DEMAND:** Minimum High-Speed Diesel demand (56,000 tonnes/day)
         * **HSD_SULFUR_MAX:** Product quality upper bound (0.05 wt%)
@@ -220,23 +213,18 @@ if uploaded_file and solve_button:
 
         These constraints cannot be simultaneously satisfied.
         """)
-
         st.success(
             "**Verified Corrective Action:**\n\n"
             "Relax **HSD_SULFUR_MAX** by **0.020 wt%**.\n"
             "BharatOpt has evaluated this trust-region step and verified that "
             "this change restores refinery feasibility."
         )
-
         with st.expander("View Raw Farkas Certificate (Debugging)"):
             farkas_data = result.get("farkas_multipliers", [])
             if farkas_data:
                 st.json(farkas_data)
             else:
-                st.info(
-                    "No Farkas multipliers were returned by the native solver for this run."
-                )
-
+                st.info("No Farkas multipliers were returned by the native solver for this run.")
     else:
         st.error(f"Solver Terminated Unexpectedly: {result.get('status')}")
         st.write(result.get("error", "Unknown fatal error."))
