@@ -23,6 +23,21 @@ jobs:
         run: ./build/bharatopt_cli --mps examples/max_demo.mps
       - name: Check JSON output
         run: ./build/bharatopt_cli --demo --json | python3 -c 'import json,sys; json.load(sys.stdin); print("valid JSON")'
+      - name: Validate nonlinear refinery model
+        run: |
+          ./build/bharatopt_cli --refinery-json examples/refinery_pooling.json --output build/refinery-result.json --mode certified
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path("build/refinery-result.json").read_text())
+          assert data["constraint_audit_passed"] is True
+          assert data["objective"] is not None
+          assert data["global_upper_bound"] is not None
+          assert data["variables"]
+          print(json.dumps(data, indent=2))
+          PY
+      - name: Check Streamlit app syntax
+        run: python3 -m py_compile app.py
       - name: Check Python
         run: python3 -m py_compile api.py scripts/benchmark.py
   cuda-compile:
