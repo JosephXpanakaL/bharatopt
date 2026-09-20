@@ -204,7 +204,7 @@ static void write_solution_csv(
 
 int main(int argc, char** argv) {
     bool demo = false, mip_demo = false, qp_demo = false, ip = false, pooling_demo = false, refinery_json = false;
-    bool use_cuda = false, json = false, lp_only = false;
+    bool use_cuda = false, json = false, lp_only = false, check_infeasible = false;
     std::string mps, refinery_json_path, output_path, csv_output_path, mode;
     std::size_t global_nodes = 200;
     double global_gap = 1e-5;
@@ -239,6 +239,8 @@ int main(int argc, char** argv) {
             use_cuda = true;
         } else if (a == "--json") {
             json = true;
+        } else if (a == "--check-infeasible") {
+            check_infeasible = true;
         } else if (a == "--lp-only") {
             lp_only = true;
         } else if ((a == "--mps" || a == "--input") && i + 1 < argc) {
@@ -478,6 +480,25 @@ int main(int argc, char** argv) {
 
         if (!csv_output_path.empty()) {
             write_solution_csv(csv_output_path, m, r);
+        }
+
+        if (check_infeasible && !r.converged) {
+            std::cout << "\n[BharatOpt] Infeasibility detected. Diagnosing Irreducible Infeasible Subsystem (IIS)...\n";
+            auto oracle = [&](const bharatopt::LPModel& submodel, const std::vector<int>&, double tlim) -> bharatopt::FeasibilityStatus {
+                bharatopt::SolverOptions sub_opt = opt;
+                sub_opt.time_limit_sec = tlim;
+                sub_opt.max_iterations = 1000;
+                auto sub_res = solver.solve_lp(submodel, sub_opt);
+                if (sub_res.converged) return bharatopt::FeasibilityStatus::Feasible;
+                if (sub_res.status == "INFEASIBLE_PRESOLVE" || (!sub_res.converged && sub_res.primal_residual > 0.1))
+                    return bharatopt::FeasibilityStatus::Infeasible;
+                return bharatopt::FeasibilityStatus::Unknown;
+            };
+            bharatopt::BoundedIISOptions iis_opts;
+            iis_opts.time_limit_sec = 2.5;
+            iis_opts.max_iterations = 15;
+            auto iis_res = bharatopt::computeBoundedIIS(m, oracle, iis_opts);
+            std::cout << iis_res.to_json() << "\n";
         }
 
         return r.converged ? 0 : 3;
