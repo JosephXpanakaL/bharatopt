@@ -10,5 +10,5 @@ struct PreprocessResult {
 };
 PreprocessResult preprocess_lp(const LPModel& input, int scaling_passes = 5);
 void recover_primal(const std::vector<double>& scaled_x, const std::vector<double>& column_scale, std::vector<double>& x);
-double estimate_matrix_condition_number(const CsrMatrix& A, int max_iter = 30);
+double estimate_matrix_condition_number(const SparseMatrixCSR& A, int max_iter = 30);
 }

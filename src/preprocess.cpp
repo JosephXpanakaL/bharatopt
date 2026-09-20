@@ -172,7 +172,7 @@ void recover_primal(const std::vector<double>&scaled_x,const std::vector<double>
   x.resize(scaled_x.size());for(std::size_t j=0;j<x.size();j++)x[j]=scaled_x[j]*column_scale[j];
 }
 
-double estimate_matrix_condition_number(const CsrMatrix& A, int max_iter) {
+double estimate_matrix_condition_number(const SparseMatrixCSR& A, int max_iter) {
   if (A.rows == 0 || A.cols == 0 || A.values.empty()) return 1.0;
   std::vector<double> v(A.cols, 1.0 / std::sqrt(static_cast<double>(A.cols)));
   std::vector<double> Av(A.rows, 0.0);

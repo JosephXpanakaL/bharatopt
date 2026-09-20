@@ -8,6 +8,7 @@ namespace bharatopt {
 constexpr double INF = std::numeric_limits<double>::infinity();
 enum class RowSense { LessEqual, GreaterEqual, Equal };
 struct SparseMatrixCSR { std::size_t rows{0},cols{0}; std::vector<double> values; std::vector<int> col_index,row_ptr; };
+using CsrMatrix = SparseMatrixCSR;
 struct ConstraintRow { std::string name; RowSense sense{RowSense::Equal}; double rhs{0.0}; };
 struct LPModel {
   std::string name;
