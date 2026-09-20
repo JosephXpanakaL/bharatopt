@@ -4,6 +4,7 @@
 #include <chrono>
 #include <cmath>
 #include <iomanip>
+#include <queue>
 #include <sstream>
 #include <stdexcept>
 #include <utility>
@@ -1114,8 +1115,13 @@ GlobalPoolingResult solve_global_pooling(
     return result;
   }
 
-  std::vector<Node> pending;
-  pending.push_back({model, root_mc.global_upper_bound, 0});
+  struct NodeCompare {
+    bool operator()(const Node& a, const Node& b) const {
+      return a.bound < b.bound;
+    }
+  };
+  std::priority_queue<Node, std::vector<Node>, NodeCompare> pending;
+  pending.push({model, root_mc.global_upper_bound, 0});
 
   while (!pending.empty() &&
          result.nodes_explored < options.max_nodes) {
@@ -1124,12 +1130,9 @@ GlobalPoolingResult solve_global_pooling(
         std::chrono::duration<double>(now - started).count();
     if (elapsed >= options.time_limit_sec) break;
 
-    // Best-bound selection: process the node with the largest upper bound.
-    auto best_it = std::max_element(
-        pending.begin(), pending.end(),
-        [](const Node& a, const Node& b) { return a.bound < b.bound; });
-    Node node = std::move(*best_it);
-    pending.erase(best_it);
+    // Best-bound selection: pop the node with the highest upper bound (O(log N))
+    Node node = pending.top();
+    pending.pop();
     ++result.nodes_explored;
 
     const double required_gap =
@@ -1225,7 +1228,7 @@ GlobalPoolingResult solve_global_pooling(
           return;
         }
       }
-      pending.push_back({
+      pending.push({
           std::move(child),
           child_mc.global_upper_bound,
           node.depth + 1});
@@ -1235,9 +1238,7 @@ GlobalPoolingResult solve_global_pooling(
     push_child(std::move(right));
   }
 
-  double remaining_upper = -INF;
-  for (const auto& node : pending)
-    remaining_upper = std::max(remaining_upper, node.bound);
+  double remaining_upper = pending.empty() ? -INF : pending.top().bound;
 
   result.global_bound = pending.empty()
       ? (result.feasible ? result.objective : root_mc.global_upper_bound)
