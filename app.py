@@ -166,22 +166,41 @@ if uploaded_file and solve_button:
     with st.spinner("Preparing native BharatOpt engine and executing model..."):
         result = solve_with_bharatopt_cli(uploaded_file)
 
-    if result.get("status", "").lower() in ["optimal", "feasible", "globally_certified_within_tolerance", "global_optimal_within_tolerance"]:
-        if result.get("global_optimality_certified"):
-            st.success("Global optimum certified within the configured tolerance.")
+    status = result.get("status", "").lower()
+    is_json_model = Path(uploaded_file.name).suffix.lower() == ".json"
+    success_statuses = ["optimal", "feasible", "globally_certified_within_tolerance", "global_optimal_within_tolerance"]
+
+    if status in success_statuses:
+        if is_json_model:
+            if result.get("global_optimality_certified"):
+                st.success("Global optimum certified within the configured tolerance.")
+            else:
+                st.success("Feasible production plan found; global certification not reached within the search limits.")
         else:
-            st.success("Feasible production plan found; global certification not reached within the search limits.")
+            if status == "optimal":
+                st.success("MPS model solved successfully.")
+            else:
+                st.success("Feasible MPS solution found.")
 
         c1, c2, c3, c4 = st.columns(4)
         objective = result.get("objective")
-        bound = result.get("mccormick_global_upper_bound", result.get("certified_lower_bound"))
-        gap = result.get("nonlinear_gap", result.get("relative_gap"))
-        c1.metric("Objective", f"{objective:,.2f}" if isinstance(objective, (int, float)) else "Not reported")
-        c2.metric("Global / Solver Bound", f"{bound:,.2f}" if isinstance(bound, (int, float)) else "Not reported")
-        c3.metric("Gap", f"{gap * 100:.4f}%" if isinstance(gap, (int, float)) else "Not reported")
-        c4.metric("B&B Nodes", f"{result.get('nodes_explored', 0):,}")
+        if is_json_model:
+            bound = result.get("mccormick_global_upper_bound", result.get("certified_lower_bound"))
+            gap = result.get("nonlinear_gap", result.get("relative_gap"))
+            nodes = result.get("nodes_explored", 0)
+            bound_label = "Global / Solver Bound"
+        else:
+            bound = result.get("certified_lower_bound", result.get("mccormick_global_upper_bound"))
+            gap = result.get("relative_gap", result.get("nonlinear_gap"))
+            nodes = result.get("nodes_explored", 0)
+            bound_label = "Solver Bound"
 
-        if "variables" in result:
+        c1.metric("Objective", f"{objective:,.2f}" if isinstance(objective, (int, float)) else "Not reported")
+        c2.metric(bound_label, f"{bound:,.2f}" if isinstance(bound, (int, float)) else "Not reported")
+        c3.metric("Gap", f"{gap * 100:.4f}%" if isinstance(gap, (int, float)) else "Not reported")
+        c4.metric("B&B Nodes", f"{nodes:,}")
+
+        if is_json_model and "variables" in result:
             st.subheader("Optimized Refinery Variables")
             st.dataframe(result["variables"], use_container_width=True, hide_index=True)
             v = result.get("constraint_max_violation")
@@ -194,7 +213,7 @@ if uploaded_file and solve_button:
         else:
             st.info("This is an MPS linear/MILP solve. Nonlinear refinery quantities are available when a JSON refinery model is supplied.")
 
-    elif result.get("status", "").lower() == "infeasible":
+    elif status == "infeasible":
         st.error("No feasible production plan was found for the supplied model.")
         st.caption("The current native CLI does not yet return a general Farkas certificate for every infeasible model, so no refinery-specific corrective action is invented here.")
         farkas_data = result.get("farkas_multipliers", [])
