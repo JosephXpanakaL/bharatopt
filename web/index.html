@@ -3,29 +3,120 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>BharatOpt Console</title>
+<title>BharatOpt Console | Indigenous GPU Optimization Engine</title>
 <style>
-body{font-family:Inter,system-ui,sans-serif;margin:0;background:#0b1020;color:#eef2ff}
-.wrap{max-width:1050px;margin:auto;padding:34px}
-h1{margin:0 0 6px} p{color:#aeb7d0}.card{background:#121a30;border:1px solid #26314f;border-radius:16px;padding:22px;margin:18px 0}
-button{border:0;border-radius:10px;padding:11px 16px;cursor:pointer}.primary{background:#6ea8fe;color:#06111f}
-.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.metric{padding:14px;border-radius:10px;background:#0c1426}.metric b{display:block;font-size:1.25rem;margin-top:4px}
-pre{white-space:pre-wrap;background:#080d18;padding:16px;border-radius:10px;overflow:auto}input[type=file]{width:100%}
-@media(max-width:750px){.grid{grid-template-columns:1fr}}
+:root{--bg:#070d19;--card:#0f182c;--border:#1e2d4d;--text:#f0f4fc;--muted:#8fa0c2;--accent:#3b82f6;--accent-hover:#2563eb;--green:#10b981;--yellow:#f59e0b;--red:#ef4444}
+body{font-family:'Segoe UI',Inter,system-ui,sans-serif;margin:0;background:var(--bg);color:var(--text);line-height:1.5}
+.wrap{max-width:1120px;margin:auto;padding:36px 20px}
+.header{display:flex;justify-content:space-between;align-items:center;margin-bottom:28px;padding-bottom:18px;border-bottom:1px solid var(--border)}
+h1{margin:0;font-size:2rem;background:linear-gradient(135deg,#60a5fa,#3b82f6);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.sub{color:var(--muted);font-size:0.95rem;margin-top:4px}
+.tag{background:rgba(59,130,246,0.15);color:#93c5fd;border:1px solid rgba(59,130,246,0.3);padding:4px 12px;border-radius:20px;font-size:0.85rem;font-weight:600}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:20px;margin-bottom:28px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:22px;box-shadow:0 8px 24px rgba(0,0,0,0.3)}
+h2{margin:0 0 12px;font-size:1.2rem;color:#dbeafe}
+button{border:0;border-radius:8px;padding:10px 18px;cursor:pointer;font-weight:600;transition:0.2s}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover{background:var(--accent-hover)}
+.btn-outline{background:transparent;border:1px solid var(--border);color:var(--text)}
+.btn-outline:hover{background:#162444}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-top:16px}
+.metric{padding:14px;border-radius:10px;background:#091224;border:1px solid rgba(255,255,255,0.05)}
+.metric span{display:block;font-size:0.8rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px}
+.metric b{display:block;font-size:1.3rem;margin-top:6px;color:#fff}
+pre{white-space:pre-wrap;background:#050912;padding:16px;border-radius:10px;overflow:auto;border:1px solid var(--border);color:#a5b4fc;font-size:0.9rem}
+input[type=file]{width:100%;margin-top:8px;padding:8px;background:#081020;border:1px solid var(--border);border-radius:6px;color:var(--muted)}
+label{font-size:0.9rem;color:var(--muted);display:inline-flex;align-items:center;gap:6px}
 </style>
 </head>
 <body>
 <div class="wrap">
-<h1>BharatOpt</h1>
-<p>SIH26119 • Indigenous sparse optimization solver prototype</p>
-<div class="card"><h2>Run MRPL demo</h2><label><input id="cuda" type="checkbox"> Use CUDA backend</label><br><br><button class="primary" onclick="runDemo()">Solve LP demo</button> <button onclick="runQp()">Solve QP demo</button> </div>
-<div class="card"><h2>Upload MPS</h2><input id="mps" type="file" accept=".mps"><br><br><label>CUDA <input id="mpscuda" type="checkbox"></label> <button class="primary" onclick="uploadMps()">Solve MPS</button></div>
-<div id="out" class="card" style="display:none"><div class="grid" id="metrics"></div><h3>Raw result</h3><pre id="raw"></pre></div>
+  <div class="header">
+    <div>
+      <h1>BharatOpt Solver Console</h1>
+      <div class="sub">SIH26119 • Indigenous GPU Sparse Mathematical Optimization Engine • MRPL</div>
+    </div>
+    <div class="tag">Release v0.4.0</div>
+  </div>
+
+  <div class="cards">
+    <div class="card">
+      <h2>Refinery Demos</h2>
+      <p style="color:var(--muted);font-size:0.9rem">Run built-in refinery pooling, blending LP, and quadratic QP demonstrations.</p>
+      <label><input id="cuda" type="checkbox"> Enable GPU CUDA Acceleration</label><br><br>
+      <button class="btn-primary" onclick="runDemo()">Solve LP Demo</button>
+      <button class="btn-outline" onclick="runQp()">Solve QP Demo</button>
+    </div>
+
+    <div class="card">
+      <h2>Refinery Flowsheet JSON</h2>
+      <p style="color:var(--muted);font-size:0.9rem">Upload and solve MRPL multi-unit refinery pooling flowsheet (.json).</p>
+      <input id="flowsheet" type="file" accept=".json"><br><br>
+      <button class="btn-primary" onclick="uploadFlowsheet()">Solve Flowsheet</button>
+    </div>
+
+    <div class="card">
+      <h2>Standard MPS File</h2>
+      <p style="color:var(--muted);font-size:0.9rem">Upload and optimize standard LP/MILP mathematical models (.mps).</p>
+      <input id="mps" type="file" accept=".mps"><br><br>
+      <label><input id="mpscuda" type="checkbox"> Use CUDA</label>
+      <button class="btn-primary" onclick="uploadMps()" style="margin-left:12px">Solve MPS</button>
+    </div>
+  </div>
+
+  <div id="out" class="card" style="display:none">
+    <h2>Optimization Results & Certificates</h2>
+    <div class="grid" id="metrics"></div>
+    <h3 style="margin-top:24px;font-size:1rem;color:var(--muted)">Raw Engine Contract Output</h3>
+    <pre id="raw"></pre>
+  </div>
 </div>
+
 <script>
-function show(d){document.getElementById("out").style.display="block";const keys=["status","objective","best_bound","dual_bound","mip_gap","primal_residual","dual_residual","solve_time_sec","backend","iterations","nodes"];document.getElementById("metrics").innerHTML=keys.map(k=>'<div class="metric">'+k+'<b>'+((d[k]??"—"))+'</b></div>').join("");document.getElementById("raw").textContent=JSON.stringify(d,null,2);}
-async function runQp(){const f=new FormData();const r=await fetch("/api/solve/qp-demo",{method:"POST",body:f});show(await r.json());}
-async function runDemo(){const f=new FormData();f.append("cuda",document.getElementById("cuda").checked);const r=await fetch("/api/solve/demo",{method:"POST",body:f});show(await r.json());}
-async function uploadMps(){const file=document.getElementById("mps").files[0];if(!file)return alert("Choose an MPS file");const f=new FormData();f.append("file",file);f.append("cuda",document.getElementById("mpscuda").checked);const r=await fetch("/api/solve/mps",{method:"POST",body:f});show(await r.json());}
+function show(d){
+  document.getElementById("out").style.display="block";
+  const keys=["status","objective","best_bound","dual_bound","mip_gap","primal_residual","dual_residual","max_constraint_violation","solve_time_sec","backend","iterations","nodes"];
+  document.getElementById("metrics").innerHTML=keys.map(k=>`
+    <div class="metric">
+      <span>${k.replace(/_/g," ")}</span>
+      <b>${d[k] !== undefined && d[k] !== null ? d[k] : "—"}</b>
+    </div>
+  `).join("");
+  document.getElementById("raw").textContent=JSON.stringify(d,null,2);
+  document.getElementById("out").scrollIntoView({behavior:"smooth"});
+}
+
+async function runQp(){
+  const f=new FormData();
+  const r=await fetch("/api/solve/qp-demo",{method:"POST",body:f});
+  show(await r.json());
+}
+
+async function runDemo(){
+  const f=new FormData();
+  f.append("cuda",document.getElementById("cuda").checked);
+  const r=await fetch("/api/solve/demo",{method:"POST",body:f});
+  show(await r.json());
+}
+
+async function uploadMps(){
+  const file=document.getElementById("mps").files[0];
+  if(!file) return alert("Select an MPS file first.");
+  const f=new FormData();
+  f.append("file",file);
+  f.append("cuda",document.getElementById("mpscuda").checked);
+  const r=await fetch("/api/solve/mps",{method:"POST",body:f});
+  show(await r.json());
+}
+
+async function uploadFlowsheet(){
+  const file=document.getElementById("flowsheet").files[0];
+  if(!file) return alert("Select a flowsheet JSON file first.");
+  const f=new FormData();
+  f.append("file",file);
+  const r=await fetch("/api/solve/flowsheet",{method:"POST",body:f});
+  show(await r.json());
+}
 </script>
-</body></html>
+</body>
+</html>
