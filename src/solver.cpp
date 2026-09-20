@@ -86,9 +86,20 @@ double to_original_bound(const LPModel&input,const LPModel&internal,double inter
 }
 SolverResult BharatOptSolverCore::solve_lp(const LPModel&input,const SolverOptions&o){
   if(input.A.cols!=input.objective.size()||input.A.rows!=input.row_lower.size()||input.A.rows!=input.row_upper.size()||input.lower.size()!=input.A.cols||input.upper.size()!=input.A.cols)throw std::runtime_error("Inconsistent model dimensions");
+  const auto t_total_start = std::chrono::steady_clock::now();
   const LPModel normalized=internal_min_model(input);
+  const auto t_pre_start = std::chrono::steady_clock::now();
   auto pp=preprocess_lp(normalized,o.presolve?o.scaling_passes:0);
-  if(!pp.feasible){SolverResult r;r.status="INFEASIBLE_PRESOLVE";r.backend="presolve";return r;}
+  const auto t_pre_end = std::chrono::steady_clock::now();
+  double presolve_time = std::chrono::duration<double>(t_pre_end - t_pre_start).count();
+  if(!pp.feasible){
+    SolverResult r;
+    r.status="INFEASIBLE_PRESOLVE";
+    r.backend="presolve";
+    r.presolve_time_sec=presolve_time;
+    r.solve_time_sec=presolve_time;
+    return r;
+  }
   LPModel m=std::move(pp.model);
 #ifdef BHARATOPT_CUDA_ENABLED
   if(o.use_cuda){
@@ -105,12 +116,16 @@ SolverResult BharatOptSolverCore::solve_lp(const LPModel&input,const SolverOptio
         g.dual_bound=input.maximize?-INF:INF;
         g.best_bound=g.objective;
       }
+      g.presolve_time_sec = presolve_time;
+      g.solve_time_sec = std::chrono::duration<double>(std::chrono::steady_clock::now() - t_total_start).count();
       return g;
     }
   }
 #endif
+  const auto t_prep_start = std::chrono::steady_clock::now();
   const int n=(int)m.A.cols,rc=(int)m.A.rows;
   SolverResult r;
+  r.presolve_time_sec = presolve_time;
   if(o.warm_start_x.size()==(size_t)n) { r.x = o.warm_start_x; proj(r.x, m.lower, m.upper); }
   else { r.x.assign(n,0.0); proj(r.x,m.lower,m.upper); }
   std::vector<double>xbar=r.x,xprev=r.x,y(rc,0.0),a,aty;
@@ -118,6 +133,8 @@ SolverResult BharatOptSolverCore::solve_lp(const LPModel&input,const SolverOptio
   double L=opnorm(m.A);if(!std::isfinite(L))L=1.0;if(L<1e-12)L=1.0;
   double tau=o.tau,sigma=o.sigma;if(tau<=0||sigma<=0)throw std::runtime_error("tau and sigma must be positive");
   if(tau*sigma*L*L>=0.95){double s=std::sqrt(0.9/(tau*sigma*L*L));tau*=s;sigma*=s;}
+  const auto t_prep_end = std::chrono::steady_clock::now();
+  r.matrix_prep_time_sec = std::chrono::duration<double>(t_prep_end - t_prep_start).count();
   const auto t0=std::chrono::steady_clock::now();r.backend="CPU-PDHG";
   for(int it=1;it<=o.max_iterations;it++){
     Ax(m.A,xbar,a);
@@ -178,7 +195,8 @@ SolverResult BharatOptSolverCore::solve_lp(const LPModel&input,const SolverOptio
   if(!r.converged && std::isfinite(r.primal_residual) && r.primal_residual > 0.1) {
     r.farkas_multipliers = y;
   }
-  r.solve_time_sec=std::chrono::duration<double>(std::chrono::steady_clock::now()-t0).count();
+  r.iteration_time_sec=std::chrono::duration<double>(std::chrono::steady_clock::now()-t0).count();
+  r.solve_time_sec=std::chrono::duration<double>(std::chrono::steady_clock::now()-t_total_start).count();
   return r;
 }
 SolverResult BharatOptSolverCore::solve(const LPModel& model,const SolverOptions& options){

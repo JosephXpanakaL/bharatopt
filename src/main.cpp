@@ -428,6 +428,9 @@ int main(int argc, char** argv) {
             std::cout << ",\"relative_gap\":"; jnum(std::cout, integration_gap(r));
             std::cout << ",\"iterations\":" << r.iterations;
             std::cout << ",\"time_sec\":" << r.solve_time_sec;
+            std::cout << ",\"presolve_time_sec\":" << r.presolve_time_sec;
+            std::cout << ",\"matrix_prep_time_sec\":" << r.matrix_prep_time_sec;
+            std::cout << ",\"iteration_time_sec\":" << r.iteration_time_sec;
             std::cout << ",\"backend\":" << js(r.backend);
             std::cout << ",\"variables\":[";
             for (std::size_t j = 0; j < m.var_names.size(); ++j) {
