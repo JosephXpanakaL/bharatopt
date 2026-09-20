@@ -1,0 +1,173 @@
+{
+  "name": "MRPL_Phase_III_Industrial_Refinery_Flowsheet",
+  "synthetic": false,
+  "description": "Comprehensive flowsheet benchmark inspired by Mangalore Refinery & Petrochemicals Ltd (MRPL) Phase-III configuration with CDU, VDU, Hydrocracker, FCC, and CCR Reformer units meeting Bharat Stage VI (BS-VI) fuel specifications.",
+  "feedstocks": [
+    {
+      "name": "Mangala_Crude",
+      "availability": 60000.0,
+      "cost_per_bbl": 78.50,
+      "properties": {
+        "api": 28.5,
+        "sulfur": 0.18,
+        "wax_content": 14.5
+      }
+    },
+    {
+      "name": "Arab_Heavy",
+      "availability": 85000.0,
+      "cost_per_bbl": 69.20,
+      "properties": {
+        "api": 27.0,
+        "sulfur": 2.85,
+        "wax_content": 6.2
+      }
+    },
+    {
+      "name": "Basrah_Medium",
+      "availability": 80000.0,
+      "cost_per_bbl": 73.80,
+      "properties": {
+        "api": 29.8,
+        "sulfur": 2.20,
+        "wax_content": 7.8
+      }
+    }
+  ],
+  "units": [
+    {
+      "name": "CDU_Phase_III",
+      "type": "atmospheric_distillation",
+      "capacity_min": 30000.0,
+      "capacity_max": 160000.0,
+      "energy_cost_per_bbl": 1.85,
+      "feed_streams": ["Mangala_Crude", "Arab_Heavy", "Basrah_Medium"],
+      "yields": {
+        "Mangala_Crude": {
+          "Light_Naphtha": 0.08,
+          "Heavy_Naphtha": 0.16,
+          "Kerosene_Cut": 0.14,
+          "Gas_Oil": 0.32,
+          "Atmospheric_Residue": 0.30
+        },
+        "Arab_Heavy": {
+          "Light_Naphtha": 0.06,
+          "Heavy_Naphtha": 0.12,
+          "Kerosene_Cut": 0.11,
+          "Gas_Oil": 0.26,
+          "Atmospheric_Residue": 0.45
+        },
+        "Basrah_Medium": {
+          "Light_Naphtha": 0.07,
+          "Heavy_Naphtha": 0.14,
+          "Kerosene_Cut": 0.12,
+          "Gas_Oil": 0.29,
+          "Atmospheric_Residue": 0.38
+        }
+      }
+    },
+    {
+      "name": "VDU_Phase_III",
+      "type": "vacuum_distillation",
+      "capacity_min": 15000.0,
+      "capacity_max": 75000.0,
+      "energy_cost_per_bbl": 2.20,
+      "feed_streams": ["Atmospheric_Residue"],
+      "yields": {
+        "Atmospheric_Residue": {
+          "Light_VGO": 0.28,
+          "Heavy_VGO": 0.42,
+          "Vacuum_Residue": 0.30
+        }
+      }
+    },
+    {
+      "name": "Hydrocracker_HCU",
+      "type": "hydrocracking",
+      "capacity_min": 10000.0,
+      "capacity_max": 50000.0,
+      "energy_cost_per_bbl": 4.60,
+      "feed_streams": ["Heavy_VGO", "Light_VGO"],
+      "yields": {
+        "Heavy_VGO": {
+          "HC_Naphtha": 0.18,
+          "HC_Kerosene": 0.25,
+          "ULSD_Base": 0.52,
+          "Fuel_Gas": 0.05
+        },
+        "Light_VGO": {
+          "HC_Naphtha": 0.22,
+          "HC_Kerosene": 0.28,
+          "ULSD_Base": 0.46,
+          "Fuel_Gas": 0.04
+        }
+      }
+    },
+    {
+      "name": "CCR_Reformer",
+      "type": "catalytic_reforming",
+      "capacity_min": 5000.0,
+      "capacity_max": 35000.0,
+      "energy_cost_per_bbl": 3.40,
+      "feed_streams": ["Heavy_Naphtha"],
+      "yields": {
+        "Heavy_Naphtha": {
+          "Reformate_RON100": 0.86,
+          "LPG": 0.09,
+          "Hydrogen_Rich_Gas": 0.05
+        }
+      }
+    }
+  ],
+  "pools": [
+    {
+      "name": "Gasoline_MS_Pool",
+      "inlets": ["Light_Naphtha", "HC_Naphtha", "Reformate_RON100"],
+      "tracked_properties": ["octane_ron", "sulfur_ppm"]
+    },
+    {
+      "name": "Diesel_HSD_Pool",
+      "inlets": ["Gas_Oil", "ULSD_Base"],
+      "tracked_properties": ["cetane_index", "sulfur_ppm"]
+    },
+    {
+      "name": "Aviation_ATF_Pool",
+      "inlets": ["Kerosene_Cut", "HC_Kerosene"],
+      "tracked_properties": ["smoke_point_mm", "freezing_point_c"]
+    }
+  ],
+  "products": [
+    {
+      "name": "BS_VI_Motor_Spirit_95",
+      "pool": "Gasoline_MS_Pool",
+      "demand_min": 10000.0,
+      "demand_max": 45000.0,
+      "price_per_bbl": 112.50,
+      "specifications": {
+        "octane_ron": {"min": 95.0},
+        "sulfur_ppm": {"max": 10.0}
+      }
+    },
+    {
+      "name": "BS_VI_High_Speed_Diesel",
+      "pool": "Diesel_HSD_Pool",
+      "demand_min": 25000.0,
+      "demand_max": 80000.0,
+      "price_per_bbl": 108.00,
+      "specifications": {
+        "cetane_index": {"min": 51.0},
+        "sulfur_ppm": {"max": 10.0}
+      }
+    },
+    {
+      "name": "Jet_A1_Aviation_Turbine_Fuel",
+      "pool": "Aviation_ATF_Pool",
+      "demand_min": 8000.0,
+      "demand_max": 28000.0,
+      "price_per_bbl": 118.00,
+      "specifications": {
+        "smoke_point_mm": {"min": 25.0}
+      }
+    }
+  ]
+}

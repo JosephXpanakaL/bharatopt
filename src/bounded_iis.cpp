@@ -294,7 +294,38 @@ BoundedIISResult computeBoundedIIS(
   }
 
   result.business_explanation = explanation.str();
+
+  for (int r : result.conflicting_rows) {
+    ConflictingConstraintDetail detail;
+    detail.row_index = r;
+    detail.row_name = row_label(model, r);
+    detail.description = describe_constraint(model, r);
+    detail.lower = (r >= 0 && static_cast<std::size_t>(r) < model.row_lower.size()) ? model.row_lower[r] : 0.0;
+    detail.upper = (r >= 0 && static_cast<std::size_t>(r) < model.row_upper.size()) ? model.row_upper[r] : 0.0;
+    result.conflict_details.push_back(std::move(detail));
+  }
+
   return result;
+}
+
+std::string BoundedIISResult::to_json() const {
+  std::ostringstream ss;
+  ss << "{";
+  ss << "\"status\":" << static_cast<int>(status);
+  ss << ",\"original_infeasible\":" << (original_infeasible ? "true" : "false");
+  ss << ",\"irreducible_candidate\":" << (irreducible_candidate ? "true" : "false");
+  ss << ",\"elapsed_sec\":" << elapsed_sec;
+  ss << ",\"conflicts\":[";
+  for (std::size_t i = 0; i < conflict_details.size(); ++i) {
+    if (i) ss << ",";
+    ss << "{\"row_index\":" << conflict_details[i].row_index
+       << ",\"name\":\"" << conflict_details[i].row_name << "\""
+       << ",\"lower\":" << conflict_details[i].lower
+       << ",\"upper\":" << conflict_details[i].upper
+       << "}";
+  }
+  ss << "]}";
+  return ss.str();
 }
 
 } // namespace bharatopt

@@ -29,7 +29,7 @@
 #include <vector>
 
 #include "bharatopt/refinery_model_types.hpp"
-// #include "bharatopt/pooling_model.hpp"   // your existing solver's model class
+#include "bharatopt/pooling.hpp"
 
 namespace bharatopt::refinery {
 
@@ -71,10 +71,8 @@ public:
     // without, but validate() is the complete, user-facing check list.
     ValidationResult validate() const;
 
-    // Builds the generic pooling model. Call only after validate().valid
-    // is true — behavior on an invalid model is intentionally undefined
-    // rather than silently producing a wrong model.
-    // PoolingModel build() const;
+    // Builds the concrete pooling model for the SLP/McCormick solver.
+    bharatopt::PoolingModel build() const;
 
     const RefineryModel& model() const { return model_; }
 

@@ -305,4 +305,72 @@ double pooling_max_constraint_violation(const PoolingModel& model,const std::vec
   return std::max(0.0,worst);
 }
 
+std::string RefineryAuditReport::summary() const {
+  std::ostringstream ss;
+  ss << "Refinery Solution Audit:\n";
+  ss << "  Objective: " << objective << "\n";
+  ss << "  Max Bound Violation: " << max_bound_violation << "\n";
+  ss << "  Max Constraint Violation: " << max_constraint_violation << "\n";
+  ss << "  Status: " << (all_satisfied ? "ALL_CONSTRAINTS_SATISFIED" : "CONSTRAINTS_VIOLATED") << "\n";
+  for (const auto& row : row_audits) {
+    if (!row.satisfied) {
+      ss << "  - Row '" << row.name << "': value=" << row.actual_value
+         << " bounds=[" << row.lower << ", " << row.upper << "] violation=" << row.violation << "\n";
+    }
+  }
+  return ss.str();
+}
+
+RefineryAuditReport audit_refinery_solution(
+    const PoolingModel& model,
+    const std::vector<double>& x,
+    double tolerance) {
+  if (x.size() != model.linear.A.cols) {
+    throw std::invalid_argument("Solution dimension does not match refinery model");
+  }
+  RefineryAuditReport report;
+  report.objective = pooling_objective_value(model, x);
+  report.all_satisfied = true;
+
+  double max_bnd = 0.0;
+  for (std::size_t j = 0; j < x.size(); ++j) {
+    if (std::isfinite(model.linear.lower[j])) max_bnd = std::max(max_bnd, model.linear.lower[j] - x[j]);
+    if (std::isfinite(model.linear.upper[j])) max_bnd = std::max(max_bnd, x[j] - model.linear.upper[j]);
+  }
+  report.max_bound_violation = std::max(0.0, max_bnd);
+
+  double max_con = 0.0;
+  for (std::size_t r = 0; r < model.linear.A.rows; ++r) {
+    double ax = 0.0;
+    for (std::size_t k = model.linear.A.row_ptr[r]; k < model.linear.A.row_ptr[r + 1]; ++k) {
+      ax += model.linear.A.values[k] * x[static_cast<std::size_t>(model.linear.A.col_index[k])];
+    }
+    for (const auto& t : model.constraint_bilinear[r]) {
+      ax += t.coefficient * x[t.left] * x[t.right];
+    }
+    double viol = 0.0;
+    if (std::isfinite(model.linear.row_lower[r]) && model.linear.row_lower[r] - ax > tolerance) {
+      viol = model.linear.row_lower[r] - ax;
+    }
+    if (std::isfinite(model.linear.row_upper[r]) && ax - model.linear.row_upper[r] > tolerance) {
+      viol = std::max(viol, ax - model.linear.row_upper[r]);
+    }
+    max_con = std::max(max_con, viol);
+
+    ConstraintAuditDetail detail;
+    detail.name = r < model.linear.rows.size() ? model.linear.rows[r].name : ("row_" + std::to_string(r));
+    detail.lower = model.linear.row_lower[r];
+    detail.upper = model.linear.row_upper[r];
+    detail.actual_value = ax;
+    detail.violation = viol;
+    detail.satisfied = (viol <= tolerance);
+    if (!detail.satisfied) report.all_satisfied = false;
+    report.row_audits.push_back(detail);
+  }
+  report.max_constraint_violation = max_con;
+  if (report.max_bound_violation > tolerance) report.all_satisfied = false;
+
+  return report;
+}
+
 } // namespace bharatopt

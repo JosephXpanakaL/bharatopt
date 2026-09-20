@@ -4,6 +4,7 @@
 #include <chrono>
 #include <cmath>
 #include <iomanip>
+#include <queue>
 #include <sstream>
 #include <stdexcept>
 #include <utility>
@@ -827,6 +828,50 @@ PoolingSLPResult solve_pooling_slp(
       }
       if (!improved) break;
     }
+
+    // Phase-1 cyclic projection feasibility restoration on linearized constraints
+    for (int p1 = 0; p1 < 64 && best_violation > options.lp_options.tolerance; ++p1) {
+      Vec candidate = x;
+      bool moved = false;
+      for (std::size_t r = 0; r < model.linear.A.rows; ++r) {
+        double val = 0.0;
+        Vec grad(n, 0.0);
+        for (std::size_t k = model.linear.A.row_ptr[r];
+             k < model.linear.A.row_ptr[r + 1]; ++k) {
+          int j = model.linear.A.col_index[k];
+          double a = model.linear.A.values[k];
+          val += a * candidate[j];
+          grad[j] += a;
+        }
+        for (const auto& t : model.constraint_bilinear[r]) {
+          val += t.coefficient * candidate[t.left] * candidate[t.right];
+          grad[t.left] += t.coefficient * candidate[t.right];
+          grad[t.right] += t.coefficient * candidate[t.left];
+        }
+        double resid = 0.0;
+        if (std::isfinite(model.linear.row_lower[r]) && val < model.linear.row_lower[r]) {
+          resid = model.linear.row_lower[r] - val;
+        } else if (std::isfinite(model.linear.row_upper[r]) && val > model.linear.row_upper[r]) {
+          resid = model.linear.row_upper[r] - val;
+        }
+        if (std::abs(resid) > options.lp_options.tolerance) {
+          double norm_sq = 0.0;
+          for (double g : grad) norm_sq += g * g;
+          if (norm_sq > 1e-12) {
+            double step = resid / norm_sq;
+            for (std::size_t j = 0; j < n; ++j) {
+              candidate[j] = std::clamp(
+                  candidate[j] + 0.8 * step * grad[j],
+                  model.linear.lower[j],
+                  model.linear.upper[j]);
+            }
+            moved = true;
+          }
+        }
+      }
+      if (moved) consider(candidate);
+      else break;
+    }
   }
 
   if (!nonlinear_feasible(
@@ -1070,8 +1115,13 @@ GlobalPoolingResult solve_global_pooling(
     return result;
   }
 
-  std::vector<Node> pending;
-  pending.push_back({model, root_mc.global_upper_bound, 0});
+  struct NodeCompare {
+    bool operator()(const Node& a, const Node& b) const {
+      return a.bound < b.bound;
+    }
+  };
+  std::priority_queue<Node, std::vector<Node>, NodeCompare> pending;
+  pending.push({model, root_mc.global_upper_bound, 0});
 
   while (!pending.empty() &&
          result.nodes_explored < options.max_nodes) {
@@ -1080,12 +1130,9 @@ GlobalPoolingResult solve_global_pooling(
         std::chrono::duration<double>(now - started).count();
     if (elapsed >= options.time_limit_sec) break;
 
-    // Best-bound selection: process the node with the largest upper bound.
-    auto best_it = std::max_element(
-        pending.begin(), pending.end(),
-        [](const Node& a, const Node& b) { return a.bound < b.bound; });
-    Node node = std::move(*best_it);
-    pending.erase(best_it);
+    // Best-bound selection: pop the node with the highest upper bound (O(log N))
+    Node node = pending.top();
+    pending.pop();
     ++result.nodes_explored;
 
     const double required_gap =
@@ -1181,7 +1228,7 @@ GlobalPoolingResult solve_global_pooling(
           return;
         }
       }
-      pending.push_back({
+      pending.push({
           std::move(child),
           child_mc.global_upper_bound,
           node.depth + 1});
@@ -1191,9 +1238,7 @@ GlobalPoolingResult solve_global_pooling(
     push_child(std::move(right));
   }
 
-  double remaining_upper = -INF;
-  for (const auto& node : pending)
-    remaining_upper = std::max(remaining_upper, node.bound);
+  double remaining_upper = pending.empty() ? -INF : pending.top().bound;
 
   result.global_bound = pending.empty()
       ? (result.feasible ? result.objective : root_mc.global_upper_bound)

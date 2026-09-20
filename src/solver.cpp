@@ -139,6 +139,20 @@ SolverResult BharatOptSolverCore::solve_lp(const LPModel&input,const SolverOptio
     r.dual_residual=std::sqrt(ds)/(1+n2(m.objective));r.iterations=it;
     if(!std::isfinite(r.primal_residual)||!std::isfinite(r.dual_residual)){r.status="NUMERICAL_FAILURE";break;}
     if(std::max(r.primal_residual,r.dual_residual)<=o.tolerance){r.converged=true;break;}
+
+    // Adaptive step-size residual balancing (PDHG / Barzilai-Borwein style)
+    if(it % 50 == 0){
+      if(r.primal_residual > 5.0 * r.dual_residual && tau > 1e-6){
+        tau /= 1.25; sigma *= 1.25;
+      } else if(r.dual_residual > 5.0 * r.primal_residual && sigma > 1e-6){
+        tau *= 1.25; sigma /= 1.25;
+      }
+      if(tau * sigma * L * L >= 0.95){
+        double s = std::sqrt(0.9 / (tau * sigma * L * L));
+        tau *= s; sigma *= s;
+      }
+    }
+
     if(o.time_limit_sec>0&&std::chrono::duration<double>(std::chrono::steady_clock::now()-t0).count()>=o.time_limit_sec){r.status="TIME_LIMIT";break;}
   }
   double db=dual_lower_bound(m,y);
