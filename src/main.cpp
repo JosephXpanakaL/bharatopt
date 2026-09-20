@@ -12,6 +12,7 @@
 #include <string>
 #include <vector>
 #include <filesystem>
+#include <limits>
 
 static std::string js(const std::string& s) {
     std::string o = "\"";
@@ -55,7 +56,7 @@ static void write_refinery_json(
     std::ofstream out(path);
     if (!out) throw std::runtime_error("Cannot open output file: " + path);
 
-    const double bound = mc.solve_result.objective;
+    const double bound = mc.has_global_upper_bound ? mc.global_upper_bound : mc.solve_result.objective;
     const double objective = slp.objective;
     const double violation = slp.x.empty()
         ? std::numeric_limits<double>::quiet_NaN()
@@ -71,6 +72,7 @@ static void write_refinery_json(
     out << ",\"model\":" << js(refinery.pooling.name);
     out << ",\"objective\":"; jnum(out, objective);
     out << ",\"mccormick_global_upper_bound\":"; jnum(out, bound);
+    out << ",\"global_optimality_certified\":" << (certified ? "true" : "false");
     out << ",\"nonlinear_gap\":"; jnum(out, gap);
     out << ",\"constraint_max_violation\":"; jnum(out, violation);
     out << ",\"slp_iterations\":" << slp.iterations;
