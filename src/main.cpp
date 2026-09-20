@@ -184,6 +184,11 @@ int main(int argc, char** argv) {
 
         if (a == "solve") {
             continue;
+        } else if (a == "--version" || a == "-v") {
+            std::cout << "BharatOpt Optimization Solver v0.4.0 (SIH26119 - Team NovaKin - MRPL)\n"
+                      << "Architecture: C++20 Sparse Optimization Stack\n"
+                      << "Backends: CPU-PDHG, CPU-IPM, Simplex, CUDA-Resident\n";
+            return 0;
         } else if (a == "--demo") {
             demo = true;
         } else if (a == "--mip-demo") {
