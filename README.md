@@ -4,7 +4,7 @@ SIH26119 • Team NovaKin • MRPL
 
 BharatOpt is a from-scratch sparse mathematical optimization engine. The core is C++20; the NVIDIA path uses CUDA, cuSPARSE and cuBLAS. The project is designed to become a sovereign industrial LP/MILP/QP stack rather than a wrapper around an existing solver.
 
-> Current state: an executable research prototype with working LP, small MILP, convex QP, MPS input, presolve/scaling, persistent GPU execution, API/dashboard, tests, CI and benchmark tooling. It is not yet a production replacement for CPLEX/Gurobi/Xpress.
+> Current state: an executable research prototype with working LP, small MILP, convex QP, MPS input, configurable nonlinear pooling/refinery JSON models, SLP, McCormick relaxations, constraint auditing, dashboard integration, tests and CI. It is not yet a production replacement for CPLEX/Gurobi/Xpress.
 
 ## Implemented engine
 
@@ -34,6 +34,16 @@ BharatOpt is a from-scratch sparse mathematical optimization engine. The core is
 - Convex quadratic objective prototype with sparse Q.
 - Projected primal-dual iterations with the quadratic gradient term.
 - QP demo and regression test.
+
+### Nonlinear pooling / refinery models
+- Configurable JSON model input with named continuous variables, bounds, linear objective terms, bilinear objective terms, linear constraints and bilinear constraint terms.
+- Sequential Linear Programming (SLP) with trust-region acceptance/rejection based on predicted versus true nonlinear improvement.
+- McCormick convex-hull relaxation for bilinear terms; for maximization, its solved objective is reported as a global upper bound on the nonlinear optimum.
+- Post-solve nonlinear constraint audit reports the maximum true-model violation and the actual variable values used by the SLP solution.
+- The web console accepts `.json` refinery models directly; the built-in pooling benchmark remains available only as an engine regression check.
+
+Example:
+    ./build/bharatopt --refinery-json examples/refinery_pooling.json --output result.json --mode certified
 
 ### Interior point
 - Small-model Mehrotra predictor-corrector primal-dual method.
@@ -103,8 +113,10 @@ GitHub Actions validates C++ build, tests, LP/MILP/QP smoke tests, maximization 
 6. Mixed FP32/FP64 execution with iterative refinement.
 7. GPU/CPU structure-aware selection and out-of-core execution.
 8. Netlib/Mittelmann/QPLIB/MIPLIB benchmark harness and external-baseline runner.
-9. MRPL-inspired refinery blending/scheduling model family.
-10. Stable C API and Python bindings over the native engine.
+9. Feasible-start/Phase-1 construction for nonlinear refinery models so models do not require a feasible midpoint.
+10. Multi-pool refinery flows, product-quality equations and unit-operation constraints driven by plant data.
+11. Global spatial branch-and-bound / tighter relaxations for stronger nonlinear optimality certificates.
+12. Stable C API and Python bindings over the native engine.
 
 ## Project layout
 
